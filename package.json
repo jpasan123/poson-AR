@@ -1,0 +1,12 @@
+{
+  "name": "jendo-poson-ar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JENDO Poson AR - Image tracking web experience",
+  "scripts": {
+    "compile-target": "node scripts/compile-browser.js",
+    "serve": "npx serve public -l 3000",
+    "build": "echo 'Static site — no build step'",
+    "deploy:vps": "./scripts/deploy.sh"
+  }
+}

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Compile AR Target</title>
+</head>
+<body>
+  <h1>Compiling AR target from logo…</h1>
+  <p id="status">Loading…</p>
+  <script type="module">
+    import { Compiler } from 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js';
+
+    const status = document.getElementById('status');
+    try {
+      const res = await fetch('../assets/company_logo.jpeg');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = url;
+      });
+      const compiler = new Compiler();
+      status.textContent = 'Compiling (this may take a minute)…';
+      await compiler.compileImageTargets([img], (p) => {
+        status.textContent = `Compiling… ${Math.round(p)}%`;
+      });
+      const data = await compiler.exportData();
+      const out = new Blob([data], { type: 'application/octet-stream' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(out);
+      a.download = 'targets.mind';
+      a.click();
+      status.textContent = 'Done! targets.mind downloaded.';
+    } catch (e) {
+      status.textContent = 'Error: ' + e.message;
+      console.error(e);
+    }
+  </script>
+</body>
+</html>

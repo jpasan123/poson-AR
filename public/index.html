@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#2d0a4e" />
+  <title>Poson Vesak AR</title>
+  <link rel="preload" href="targets.mind" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="assets/models/poson-lantern.glb" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="assets/models/jendo-building.glb" as="fetch" crossorigin="anonymous" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="page-bg" role="presentation">
+    <img src="assets/ui-background.jpg" alt="" class="page-bg-img" />
+  </div>
+  <div class="page-overlay" role="presentation"></div>
+
+  <main class="landing">
+    <div class="camera-spot">
+      <a href="ar.html" class="camera-btn" aria-label="Start AR Camera">
+        <span class="camera-btn-ring"></span>
+        <span class="camera-btn-inner">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 7h4l2-3h4l2 3h4v12H4V7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+        </span>
+      </a>
+      <p class="camera-label">Open Camera</p>
+    </div>
+  </main>
+</body>
+</html>

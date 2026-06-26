@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#000000" />
+  <title>JENDO Poson AR</title>
+  <link rel="preload" href="targets.mind" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="assets/models/poson-lantern.glb" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="assets/models/jendo-building.glb" as="fetch" crossorigin="anonymous" />
+  <link rel="stylesheet" href="css/ar.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="loading-screen" class="overlay">
+    <div class="loader-card">
+      <div class="spinner"></div>
+      <p class="loader-title">Loading…</p>
+    </div>
+  </div>
+
+  <div id="start-screen" class="overlay hidden">
+    <button id="start-btn" class="start-btn">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+        <path d="M4 7h4l2-3h4l2 3h4v12H4V7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <circle cx="12" cy="13" r="3.5" stroke="currentColor" stroke-width="1.8"/>
+      </svg>
+      Tap to Start Camera
+    </button>
+  </div>
+
+  <div id="error-screen" class="overlay hidden">
+    <div class="loader-card error-card">
+      <p class="loader-title">Unable to start</p>
+      <p class="loader-sub" id="error-message"></p>
+      <a href="index.html" class="btn-ar secondary">Back</a>
+    </div>
+  </div>
+
+  <button id="back-btn" class="back-btn" aria-label="Back">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+
+  <div id="ar-controls" class="ar-controls hidden">
+    <button id="move-up" class="ctrl-btn" type="button" aria-label="Move up">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 5l7 7H5l7-7z" fill="currentColor"/>
+      </svg>
+    </button>
+    <button id="zoom-out" class="ctrl-btn" type="button" aria-label="Zoom out">−</button>
+    <button id="zoom-reset" class="ctrl-btn ctrl-btn-reset" type="button" aria-label="Reset">⟲</button>
+    <button id="zoom-in" class="ctrl-btn" type="button" aria-label="Zoom in">+</button>
+    <button id="move-down" class="ctrl-btn" type="button" aria-label="Move down">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 19l-7-7h14l-7 7z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+
+  <div id="ar-container"></div>
+
+  <script type="module" src="js/ar.js?v=6"></script>
+</body>
+</html>
