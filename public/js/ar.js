@@ -51,12 +51,27 @@ function fitModel(model, modelScale, fitMode = 'ground') {
   }
 
   model.position.sub(center);
-  if (fitMode === 'ground') {
-    model.position.y += size.y * 0.5;
+
+  switch (fitMode) {
+    case 'ground':
+      model.position.y += size.y * 0.5;
+      break;
+    case 'facade':
+      // Bottom sits on marker plane, then lift so structure aligns with building center
+      model.position.y += size.y * 0.38;
+      break;
+    case 'center':
+    default:
+      break;
   }
 
-  const maxDim = Math.max(size.x, size.y, size.z);
-  model.scale.setScalar(modelScale / maxDim);
+  let scaleBase;
+  if (fitMode === 'facade') {
+    scaleBase = Math.max(size.x, size.y * 0.88);
+  } else {
+    scaleBase = Math.max(size.x, size.y, size.z);
+  }
+  model.scale.setScalar(modelScale / scaleBase);
 }
 
 function setupAnimations(root, clips) {
@@ -96,7 +111,9 @@ function createZoomControl() {
   return {
     zoomIn: () => { userZoom = clamp(userZoom + AR_SETTINGS.zoomStep); },
     zoomOut: () => { userZoom = clamp(userZoom - AR_SETTINGS.zoomStep); },
-    reset: () => { userZoom = AR_SETTINGS.defaultUserZoom; },
+    resetFor(exp) {
+      userZoom = exp?.defaultUserZoom ?? AR_SETTINGS.defaultUserZoom;
+    },
     getZoom: () => userZoom,
   };
 }
@@ -108,7 +125,9 @@ function createPositionControl() {
   return {
     moveUp: () => { userYOffset = clamp(userYOffset + AR_SETTINGS.positionStep); },
     moveDown: () => { userYOffset = clamp(userYOffset - AR_SETTINGS.positionStep); },
-    reset: () => { userYOffset = AR_SETTINGS.defaultUserYOffset; },
+    resetFor(exp) {
+      userYOffset = exp?.defaultUserYOffset ?? AR_SETTINGS.defaultUserYOffset;
+    },
     getYOffset: () => userYOffset,
   };
 }
@@ -284,8 +303,8 @@ async function initAR() {
 
     if (prevExpId !== slot.experience.id) {
       resetCalibration();
-      zoom.reset();
-      position.reset();
+      zoom.resetFor(slot.experience);
+      position.resetFor(slot.experience);
     }
 
     activeSlot = slot;
@@ -352,8 +371,10 @@ async function initAR() {
   bindButton($('zoom-in'), () => zoom.zoomIn());
   bindButton($('zoom-out'), () => zoom.zoomOut());
   bindButton($('zoom-reset'), () => {
-    zoom.reset();
-    position.reset();
+    if (activeSlot?.experience) {
+      zoom.resetFor(activeSlot.experience);
+      position.resetFor(activeSlot.experience);
+    }
   });
   bindButton($('move-up'), () => position.moveUp());
   bindButton($('move-down'), () => position.moveDown());
