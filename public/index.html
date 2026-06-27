@@ -6,17 +6,27 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#2d0a4e" />
   <title>Poson Vesak AR</title>
-  <link rel="preload" href="targets.mind" as="fetch" crossorigin="anonymous" />
-  <link rel="preload" href="assets/models/poson-lantern.glb" as="fetch" crossorigin="anonymous" />
-  <link rel="preload" href="assets/models/jendo-building.glb" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="assets/ui-background.webp" as="image" type="image/webp" fetchpriority="high" />
+  <link rel="stylesheet" href="css/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&display=swap" rel="stylesheet" /></noscript>
 </head>
 <body>
   <div class="page-bg" role="presentation">
-    <img src="assets/ui-background.jpg" alt="" class="page-bg-img" />
+    <picture>
+      <source srcset="assets/ui-background.webp" type="image/webp" />
+      <img
+        src="assets/ui-background.jpg"
+        alt=""
+        class="page-bg-img"
+        width="553"
+        height="1200"
+        fetchpriority="high"
+        decoding="async"
+      />
+    </picture>
   </div>
   <div class="page-overlay" role="presentation"></div>
 

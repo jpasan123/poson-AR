@@ -48,6 +48,7 @@ body {
   display: block;
   object-fit: cover;
   object-position: center top;
+  content-visibility: auto;
 }
 
 .page-overlay {
