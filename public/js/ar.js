@@ -39,7 +39,7 @@ function prepareModel(scene) {
   });
 }
 
-function fitModel(model, modelScale, fitMode = 'ground') {
+function fitModel(model, modelScale, fitMode = 'ground', fitLift) {
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
@@ -57,8 +57,7 @@ function fitModel(model, modelScale, fitMode = 'ground') {
       model.position.y += size.y * 0.5;
       break;
     case 'facade':
-      // Bottom sits on marker plane, then lift so structure aligns with building center
-      model.position.y += size.y * 0.38;
+      model.position.y += size.y * (fitLift ?? 0.28);
       break;
     case 'center':
     default:
@@ -164,7 +163,7 @@ async function loadExperiences(loader, scaleGroup) {
 
     const model = gltf.scene;
     prepareModel(model);
-    fitModel(model, exp.modelScale, exp.fitMode ?? 'ground');
+    fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift);
     holder.add(model);
 
     scaleGroup.add(holder);

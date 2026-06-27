@@ -19,11 +19,12 @@ const LOCATIONS = {
     id: 'jendo-building',
     targetIndices: [3],
     modelSrc: 'assets/models/jendo-building.glb',
-    modelScale: 0.78,
-    modelOffset: { x: 0, y: 0.22, z: 0.04 },
+    modelScale: 0.84,
+    modelOffset: { x: 0, y: 0.05, z: 0.03 },
     fitMode: 'facade',
+    fitLift: 0.28,
     defaultUserZoom: 1,
-    defaultUserYOffset: 0.14,
+    defaultUserYOffset: 0,
   },
 };
 
