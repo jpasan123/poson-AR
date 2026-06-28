@@ -13,11 +13,16 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   overscroll-behavior: none;
+  position: fixed;
+  inset: 0;
 }
 
 #ar-container {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   z-index: 1;
   touch-action: none;
   overflow: hidden;
@@ -26,7 +31,8 @@ html, body {
 #ar-container canvas,
 #ar-container video {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   touch-action: none;
@@ -177,6 +183,12 @@ html, body {
 .ctrl-btn-reset { font-size: 1.1rem; }
 
 @media (orientation: landscape) {
+  html, body, #ar-container {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+  }
+
   .ar-controls {
     right: max(0.75rem, env(safe-area-inset-right));
     bottom: auto;

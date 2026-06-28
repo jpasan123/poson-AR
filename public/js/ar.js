@@ -8,7 +8,20 @@ const EXPERIENCES = setup.experiences;
 const TARGET_PRIORITY = setup.targetPriority;
 const FACADE_INDICES = new Set(setup.facadeTargetIndices);
 
-const isLandscape = () => window.innerWidth > window.innerHeight;
+const isLandscape = () => {
+  const w = window.visualViewport?.width ?? window.innerWidth;
+  const h = window.visualViewport?.height ?? window.innerHeight;
+  return w > h;
+};
+
+const getViewportSize = () => {
+  const container = document.querySelector('#ar-container');
+  const vv = window.visualViewport;
+  return {
+    w: Math.round(vv?.width ?? container?.clientWidth ?? window.innerWidth),
+    h: Math.round(vv?.height ?? container?.clientHeight ?? window.innerHeight),
+  };
+};
 
 const getMarkerOffset = (exp) => {
   if (!exp) return { x: 0, y: 0, z: 0 };
@@ -297,6 +310,9 @@ async function initAR() {
   let calibrateCount = 0;
   let calibrateSum = 0;
   let renderLoop = null;
+  let arRunning = false;
+  let orientationBusy = false;
+  let lastLandscape = isLandscape();
 
   const glbReady = loadExperiences(new GLTFLoader(), scaleGroup)
     .then((registry) => {
@@ -326,9 +342,11 @@ async function initAR() {
     const container = document.querySelector('#ar-container');
     if (!container) return;
 
-    const w = container.clientWidth || window.innerWidth;
-    const h = container.clientHeight || window.innerHeight;
+    const { w, h } = getViewportSize();
     if (w < 1 || h < 1) return;
+
+    document.documentElement.style.height = `${h}px`;
+    document.body.style.height = `${h}px`;
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.setSize(w, h, true);
@@ -345,23 +363,80 @@ async function initAR() {
     }
   };
 
-  let resizeTimer = null;
-  const onViewportChange = () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
+  const restartAR = async () => {
+    if (!arRunning || orientationBusy) return;
+    orientationBusy = true;
+
+    try {
+      displayRig.visible = false;
+      found.clear();
+      clearTimeout(hideTimer);
+      clearTimeout(logoDelayTimer);
+      activeSlot = null;
+      activeRegistry = null;
+
+      await mindar.stop();
+      await new Promise((r) => setTimeout(r, 120));
+
       resizeAR();
       applyMarkerOffsets();
       resetCalibration();
-      if (activeSlot?.experience) {
-        zoom.resetFor(activeSlot.experience);
-        position.resetFor(activeSlot.experience);
+
+      await mindar.start();
+      resizeAR();
+
+      const video = document.querySelector('#ar-container video');
+      if (video) {
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.muted = true;
+        await video.play().catch(() => {});
       }
-    }, 180);
+    } catch (err) {
+      console.error('AR orientation restart failed:', err);
+    } finally {
+      orientationBusy = false;
+    }
+  };
+
+  let resizeTimer = null;
+  const onViewportChange = () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(async () => {
+      const nowLandscape = isLandscape();
+      const flipped = nowLandscape !== lastLandscape;
+      lastLandscape = nowLandscape;
+
+      resizeAR();
+      applyMarkerOffsets();
+
+      if (arRunning && flipped) {
+        await restartAR();
+        return;
+      }
+
+      if (arRunning) {
+        resetCalibration();
+        if (activeSlot?.experience) {
+          zoom.resetFor(activeSlot.experience);
+          position.resetFor(activeSlot.experience);
+        }
+      }
+    }, 500);
   };
 
   window.addEventListener('resize', onViewportChange);
   window.addEventListener('orientationchange', onViewportChange);
   window.visualViewport?.addEventListener('resize', onViewportChange);
+  screen.orientation?.addEventListener?.('change', onViewportChange);
+
+  const containerEl = document.querySelector('#ar-container');
+  if (containerEl && 'ResizeObserver' in window) {
+    const ro = new ResizeObserver(() => onViewportChange());
+    ro.observe(containerEl);
+  }
+
+  try { screen.orientation?.unlock?.(); } catch { /* ignore */ }
 
   const readMarkerPose = (marker) => {
     marker.updateWorldMatrix(true, false);
@@ -502,6 +577,8 @@ async function initAR() {
     hide('start-screen');
     try {
       await mindar.start();
+      arRunning = true;
+      lastLandscape = isLandscape();
       resizeAR();
       applyMarkerOffsets();
       const video = document.querySelector('#ar-container video');
