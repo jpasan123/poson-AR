@@ -39,9 +39,36 @@ function prepareModel(scene) {
   });
 }
 
-function fitModel(model, modelScale, fitMode = 'ground', fitLift) {
+function getFitBox(model, fitBounds = 'mesh') {
   model.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(model);
+
+  if (fitBounds !== 'mesh') {
+    return new THREE.Box3().setFromObject(model);
+  }
+
+  const box = new THREE.Box3();
+  let found = false;
+  model.traverse((child) => {
+    if (!child.isMesh) return;
+
+    const name = (child.name || '').toLowerCase();
+    if (name.includes('camera') || name.includes('light')) return;
+
+    const meshBox = new THREE.Box3().setFromObject(child);
+    if (meshBox.isEmpty()) return;
+
+    const meshCenter = meshBox.getCenter(new THREE.Vector3());
+    if (meshCenter.y < -0.35) return;
+
+    box.union(meshBox);
+    found = true;
+  });
+
+  return found ? box : new THREE.Box3().setFromObject(model);
+}
+
+function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds = 'mesh') {
+  const box = getFitBox(model, fitBounds);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
 
@@ -57,7 +84,7 @@ function fitModel(model, modelScale, fitMode = 'ground', fitLift) {
       model.position.y += size.y * 0.5;
       break;
     case 'facade':
-      model.position.y += size.y * (fitLift ?? 0.28);
+      model.position.y += size.y * (fitLift ?? 0.45);
       break;
     case 'center':
     default:
@@ -163,7 +190,7 @@ async function loadExperiences(loader, scaleGroup) {
 
     const model = gltf.scene;
     prepareModel(model);
-    fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift);
+    fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
     holder.add(model);
 
     scaleGroup.add(holder);
