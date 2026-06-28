@@ -12,6 +12,10 @@ const LOCATIONS = {
     fitMode: 'ground',
     defaultUserZoom: 1,
     defaultUserYOffset: 0,
+    landscape: {
+      modelOffset: { x: 0, y: 0.04, z: 0.03 },
+      defaultUserYOffset: 0,
+    },
   },
   'jendo-building': {
     id: 'jendo-building',
@@ -24,6 +28,10 @@ const LOCATIONS = {
     fitBounds: 'mesh',
     defaultUserZoom: 1,
     defaultUserYOffset: 0,
+    landscape: {
+      modelOffset: { x: 0, y: 0.04, z: 0.03 },
+      defaultUserYOffset: 0,
+    },
   },
   'bay-12-place': {
     id: 'bay-12-place',
@@ -36,6 +44,10 @@ const LOCATIONS = {
     fitBounds: 'mesh',
     defaultUserZoom: 1,
     defaultUserYOffset: 0,
+    landscape: {
+      modelOffset: { x: 0, y: 0.06, z: 0.03 },
+      defaultUserYOffset: 0,
+    },
   },
 };
 

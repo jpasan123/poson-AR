@@ -8,6 +8,22 @@ const EXPERIENCES = setup.experiences;
 const TARGET_PRIORITY = setup.targetPriority;
 const FACADE_INDICES = new Set(setup.facadeTargetIndices);
 
+const isLandscape = () => window.innerWidth > window.innerHeight;
+
+const getMarkerOffset = (exp) => {
+  if (!exp) return { x: 0, y: 0, z: 0 };
+  if (isLandscape() && exp.landscape?.modelOffset) return exp.landscape.modelOffset;
+  return exp.modelOffset ?? { x: 0, y: 0, z: 0 };
+};
+
+const getDefaultYOffset = (exp) => {
+  if (!exp) return AR_SETTINGS.defaultUserYOffset;
+  if (isLandscape() && exp.landscape?.defaultUserYOffset != null) {
+    return exp.landscape.defaultUserYOffset;
+  }
+  return exp.defaultUserYOffset ?? AR_SETTINGS.defaultUserYOffset;
+};
+
 const $ = (id) => document.getElementById(id);
 const show = (id) => $(id)?.classList.remove('hidden');
 const hide = (id) => $(id)?.classList.add('hidden');
@@ -152,7 +168,7 @@ function createPositionControl() {
     moveUp: () => { userYOffset = clamp(userYOffset + AR_SETTINGS.positionStep); },
     moveDown: () => { userYOffset = clamp(userYOffset - AR_SETTINGS.positionStep); },
     resetFor(exp) {
-      userYOffset = exp?.defaultUserYOffset ?? AR_SETTINGS.defaultUserYOffset;
+      userYOffset = getDefaultYOffset(exp);
     },
     getYOffset: () => userYOffset,
   };
@@ -258,7 +274,7 @@ async function initAR() {
     const exp = experienceForTarget(EXPERIENCES, i);
     const anchor = mindar.addAnchor(i);
     const marker = new THREE.Object3D();
-    const off = exp?.modelOffset ?? { x: 0, y: 0, z: 0 };
+    const off = getMarkerOffset(exp);
     marker.position.set(off.x, off.y, off.z);
     anchor.group.add(marker);
     slots.push({ anchor, marker, targetIndex: i, experience: exp });
@@ -298,6 +314,54 @@ async function initAR() {
     calibrateCount = 0;
     calibrateSum = 0;
   };
+
+  const applyMarkerOffsets = () => {
+    slots.forEach((slot) => {
+      const off = getMarkerOffset(slot.experience);
+      slot.marker.position.set(off.x, off.y, off.z);
+    });
+  };
+
+  const resizeAR = () => {
+    const container = document.querySelector('#ar-container');
+    if (!container) return;
+
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+    if (w < 1 || h < 1) return;
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setSize(w, h, true);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+
+    const video = container.querySelector('video');
+    if (video) {
+      video.style.position = 'absolute';
+      video.style.inset = '0';
+      video.style.width = '100%';
+      video.style.height = '100%';
+      video.style.objectFit = 'cover';
+    }
+  };
+
+  let resizeTimer = null;
+  const onViewportChange = () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      resizeAR();
+      applyMarkerOffsets();
+      resetCalibration();
+      if (activeSlot?.experience) {
+        zoom.resetFor(activeSlot.experience);
+        position.resetFor(activeSlot.experience);
+      }
+    }, 180);
+  };
+
+  window.addEventListener('resize', onViewportChange);
+  window.addEventListener('orientationchange', onViewportChange);
+  window.visualViewport?.addEventListener('resize', onViewportChange);
 
   const readMarkerPose = (marker) => {
     marker.updateWorldMatrix(true, false);
@@ -438,6 +502,8 @@ async function initAR() {
     hide('start-screen');
     try {
       await mindar.start();
+      resizeAR();
+      applyMarkerOffsets();
       const video = document.querySelector('#ar-container video');
       if (video) {
         video.setAttribute('playsinline', '');
