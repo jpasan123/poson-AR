@@ -26,7 +26,7 @@ const LOCATIONS = {
   },
   'bay-12-place': {
     id: 'bay-12-place',
-    targetIndices: [4],
+    targetIndices: [4, 5],
     modelSrc: 'assets/models/bay-12-place.glb',
     modelScale: 0.82,
     modelOffset: { x: 0, y: 0.05, z: 0.03 },
@@ -45,8 +45,8 @@ export const MODES = {
       LOCATIONS['jendo-building'],
       LOCATIONS['bay-12-place'],
     ],
-    targetPriority: [4, 3, 0, 1, 2],
-    facadeTargetIndices: [3, 4],
+    targetPriority: [4, 5, 3, 0, 1, 2],
+    facadeTargetIndices: [3, 4, 5],
   },
   building: {
     targetSrc: 'targets-building.mind',
@@ -56,9 +56,9 @@ export const MODES = {
   },
   bay12: {
     targetSrc: 'targets-bay12.mind',
-    experiences: [{ ...LOCATIONS['bay-12-place'], targetIndices: [0] }],
-    targetPriority: [0],
-    facadeTargetIndices: [0],
+    experiences: [{ ...LOCATIONS['bay-12-place'], targetIndices: [0, 1] }],
+    targetPriority: [0, 1],
+    facadeTargetIndices: [0, 1],
   },
   poson: {
     targetSrc: 'targets-poson.mind',
@@ -81,8 +81,8 @@ export const AR_SETTINGS = {
   maxUserYOffset: 0.35,
   positionStep: 0.06,
   targetLostDelayMs: 400,
-  filterMinCF: 0.001,
-  filterBeta: 0.01,
+  filterMinCF: 0.0005,
+  filterBeta: 0.008,
   logoActivationDelayMs: 500,
 };
 

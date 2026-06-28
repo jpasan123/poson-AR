@@ -193,12 +193,13 @@ async function initAR() {
   show('start-screen');
 
   const slotCount = targetCount(EXPERIENCES);
+  const maxTrack = setup.mode === 'all' ? 2 : Math.min(slotCount, 3);
   let mindar;
   try {
     mindar = new MindARThree({
       container: document.querySelector('#ar-container'),
       imageTargetSrc: setup.targetSrc,
-      maxTrack: slotCount,
+      maxTrack,
       uiLoading: 'no',
       uiScanning: 'no',
       uiError: 'no',
