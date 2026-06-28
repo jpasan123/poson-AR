@@ -68,5 +68,6 @@ const ALL = require('./targets-manifest');
 (async () => {
   await compileTargets(ALL, 'targets.mind');
   await compileTargets([ALL[3]], 'targets-building.mind');
+  await compileTargets([ALL[4]], 'targets-bay12.mind');
   await compileTargets(ALL.slice(0, 3), 'targets-poson.mind');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -1,8 +1,6 @@
 /**
  * AR location registry — add new places here, then update targets-manifest.js
  * and run: node scripts/compile-browser.js
- *
- * Each location maps MindAR target index(es) → 3D model.
  */
 const LOCATIONS = {
   'poson-lantern': {
@@ -26,26 +24,47 @@ const LOCATIONS = {
     defaultUserZoom: 1,
     defaultUserYOffset: 0,
   },
+  'bay-12-place': {
+    id: 'bay-12-place',
+    targetIndices: [4],
+    modelSrc: 'assets/models/bay-12-place.glb',
+    modelScale: 0.82,
+    modelOffset: { x: 0, y: 0.05, z: 0.03 },
+    fitMode: 'facade',
+    fitLift: 0.28,
+    defaultUserZoom: 1,
+    defaultUserYOffset: 0,
+  },
 };
 
 export const MODES = {
   all: {
     targetSrc: 'targets.mind',
-    experiences: [LOCATIONS['poson-lantern'], LOCATIONS['jendo-building']],
-    targetPriority: [3, 0, 1, 2],
-    buildingTargetIndex: 3,
+    experiences: [
+      LOCATIONS['poson-lantern'],
+      LOCATIONS['jendo-building'],
+      LOCATIONS['bay-12-place'],
+    ],
+    targetPriority: [4, 3, 0, 1, 2],
+    facadeTargetIndices: [3, 4],
   },
   building: {
     targetSrc: 'targets-building.mind',
     experiences: [{ ...LOCATIONS['jendo-building'], targetIndices: [0] }],
     targetPriority: [0],
-    buildingTargetIndex: 0,
+    facadeTargetIndices: [0],
+  },
+  bay12: {
+    targetSrc: 'targets-bay12.mind',
+    experiences: [{ ...LOCATIONS['bay-12-place'], targetIndices: [0] }],
+    targetPriority: [0],
+    facadeTargetIndices: [0],
   },
   poson: {
     targetSrc: 'targets-poson.mind',
     experiences: [{ ...LOCATIONS['poson-lantern'], targetIndices: [0, 1, 2] }],
     targetPriority: [0, 1, 2],
-    buildingTargetIndex: -1,
+    facadeTargetIndices: [],
   },
 };
 
@@ -80,7 +99,7 @@ export function getSetup() {
     targetSrc: cfg.targetSrc,
     experiences: cfg.experiences,
     targetPriority: cfg.targetPriority,
-    buildingTargetIndex: cfg.buildingTargetIndex,
+    facadeTargetIndices: cfg.facadeTargetIndices,
   };
 }
 

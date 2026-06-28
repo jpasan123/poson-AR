@@ -6,7 +6,7 @@ import { AR_SETTINGS, getSetup, experienceForTarget, targetCount } from './ar-co
 const setup = getSetup();
 const EXPERIENCES = setup.experiences;
 const TARGET_PRIORITY = setup.targetPriority;
-const BUILDING_INDEX = setup.buildingTargetIndex;
+const FACADE_INDICES = new Set(setup.facadeTargetIndices);
 
 const $ = (id) => document.getElementById(id);
 const show = (id) => $(id)?.classList.remove('hidden');
@@ -317,10 +317,11 @@ async function initAR() {
     show('ar-controls');
   };
 
-  const isLogoTarget = (index) => {
-    if (BUILDING_INDEX < 0) return true;
-    return index !== BUILDING_INDEX;
-  };
+  const isLogoTarget = (index) => !FACADE_INDICES.has(index);
+
+  const hasFacadeFound = () => slots.some(
+    (s) => FACADE_INDICES.has(s.targetIndex) && found.has(s),
+  );
 
   const pickActive = () => {
     for (const idx of TARGET_PRIORITY) {
@@ -338,7 +339,7 @@ async function initAR() {
       clearTimeout(hideTimer);
       found.add(slot);
 
-      if (BUILDING_INDEX >= 0 && slot.targetIndex === BUILDING_INDEX) {
+      if (FACADE_INDICES.has(slot.targetIndex)) {
         clearTimeout(logoDelayTimer);
         pickActive();
         return;
@@ -347,9 +348,7 @@ async function initAR() {
       if (setup.mode === 'all' && isLogoTarget(slot.targetIndex)) {
         clearTimeout(logoDelayTimer);
         logoDelayTimer = setTimeout(() => {
-          if (!found.has(slots.find((s) => s.targetIndex === BUILDING_INDEX))) {
-            pickActive();
-          }
+          if (!hasFacadeFound()) pickActive();
         }, AR_SETTINGS.logoActivationDelayMs);
         return;
       }
