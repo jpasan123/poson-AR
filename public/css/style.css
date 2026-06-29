@@ -79,7 +79,7 @@ body {
 .camera-spot {
   position: absolute;
   left: 50%;
-  top: 57%;
+  top: 53%;
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
@@ -159,13 +159,13 @@ body {
 
 @media (min-width: 600px) and (orientation: portrait) {
   .camera-spot {
-    top: 56%;
+    top: 52%;
   }
 }
 
 @media (min-width: 768px) and (orientation: portrait) {
   .camera-spot {
-    top: 55%;
+    top: 51%;
   }
 
   .camera-btn {

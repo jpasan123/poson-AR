@@ -30,7 +30,7 @@ function fitLanding() {
   if (ratioDelta > 0.018) {
     img.style.objectFit = 'fill';
     img.style.objectPosition = 'center center';
-    if (spot) spot.style.top = '57%';
+    if (spot) spot.style.top = '53%';
     return;
   }
 
@@ -38,13 +38,13 @@ function fitLanding() {
     const focusY = Math.min(52, 42 + ratioDelta * 160);
     img.style.objectFit = 'cover';
     img.style.objectPosition = `center ${focusY}%`;
-    if (spot) spot.style.top = `${Math.min(59, 54 + ratioDelta * 70)}%`;
+    if (spot) spot.style.top = `${Math.min(55, 50 + ratioDelta * 70)}%`;
     return;
   }
 
   img.style.objectFit = 'cover';
   img.style.objectPosition = 'center top';
-  if (spot) spot.style.top = '52%';
+  if (spot) spot.style.top = '49%';
 }
 
 let resizeTimer;
