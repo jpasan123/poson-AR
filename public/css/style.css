@@ -58,7 +58,7 @@ body {
   height: 100%;
   display: block;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 46%;
   content-visibility: auto;
 }
 
@@ -79,7 +79,7 @@ body {
 .camera-spot {
   position: absolute;
   left: 50%;
-  top: clamp(47%, 51svh, 53%);
+  top: 57%;
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
@@ -159,13 +159,13 @@ body {
 
 @media (min-width: 600px) and (orientation: portrait) {
   .camera-spot {
-    top: clamp(49%, 51svh, 53%);
+    top: 56%;
   }
 }
 
 @media (min-width: 768px) and (orientation: portrait) {
   .camera-spot {
-    top: clamp(49.5%, 50.8svh, 52.5%);
+    top: 55%;
   }
 
   .camera-btn {
