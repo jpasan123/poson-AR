@@ -65,6 +65,19 @@ function showError(message) {
   show('error-screen');
 }
 
+function preNormalizeModel(model) {
+  model.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(model);
+  if (box.isEmpty()) return;
+
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim > 10) {
+    model.scale.setScalar(1 / maxDim);
+    model.updateMatrixWorld(true);
+  }
+}
+
 function prepareModel(scene) {
   scene.traverse((child) => {
     if (!child.isMesh) return;
@@ -319,6 +332,7 @@ async function loadExperiences(slots) {
     holder.name = exp.id;
 
     const model = asset.scene;
+    preNormalizeModel(model);
     prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
     holder.add(model);
