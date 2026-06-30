@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
-const puppeteer = require('/tmp/mindar-compile/node_modules/puppeteer');
+const puppeteer = require('/tmp/mindar-compile/node_modules/puppeteer-core');
 
 const ROOT = path.join(__dirname, '..');
 const ASSETS = path.join(ROOT, 'assets');
@@ -70,4 +70,5 @@ const ALL = require('./targets-manifest');
   await compileTargets([ALL[3]], 'targets-building.mind');
   await compileTargets([ALL[4], ALL[5]], 'targets-bay12.mind');
   await compileTargets(ALL.slice(0, 3), 'targets-poson.mind');
+  await compileTargets([ALL[6]], 'targets-thirdplace.mind');
 })().catch((e) => { console.error(e); process.exit(1); });

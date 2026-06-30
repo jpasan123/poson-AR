@@ -164,11 +164,13 @@ function detachLogoForFitting(model) {
 }
 
 function stabilizeTowerPivot(model) {
-  const pivot = model.getObjectByName('Main_Pivot');
-  if (!pivot) return;
-  pivot.rotation.set(0, 0, 0);
-  pivot.quaternion.identity();
-  pivot.updateMatrixWorld(true);
+  ['Main_Pivot', 'LanternRoot'].forEach((name) => {
+    const pivot = model.getObjectByName(name);
+    if (!pivot) return;
+    pivot.rotation.set(0, 0, 0);
+    pivot.quaternion.identity();
+    pivot.updateMatrixWorld(true);
+  });
 }
 
 function preNormalizeModel(model) {

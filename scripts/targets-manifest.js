@@ -8,4 +8,5 @@ module.exports = [
   { id: 'jendo-building', file: 'jendo-building.jpg', mime: 'image/jpeg' },
   { id: 'bay-12-full', file: 'bay-12-place.jpg', mime: 'image/jpeg' },
   { id: 'bay-12-close', file: 'bay-12-place-close.jpg', mime: 'image/jpeg' },
+  { id: 'third-place-cafe', file: 'third-place-cafe.jpg', mime: 'image/jpeg' },
 ];

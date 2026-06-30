@@ -50,6 +50,22 @@ const LOCATIONS = {
       defaultUserYOffset: 0,
     },
   },
+  'third-place-cafe': {
+    id: 'third-place-cafe',
+    targetIndices: [6],
+    modelSrc: 'assets/models/third-place-cafe.glb',
+    modelScale: 0.78,
+    modelOffset: { x: 0, y: 0.06, z: 0.05 },
+    fitMode: 'facade',
+    fitLift: 0.42,
+    animationExclude: ['LanternRoot'],
+    defaultUserZoom: 0.9,
+    defaultUserYOffset: 0,
+    landscape: {
+      modelOffset: { x: 0, y: 0.06, z: 0.05 },
+      defaultUserYOffset: 0,
+    },
+  },
 };
 
 export const MODES = {
@@ -59,9 +75,10 @@ export const MODES = {
       LOCATIONS['poson-lantern'],
       LOCATIONS['jendo-building'],
       LOCATIONS['bay-12-place'],
+      LOCATIONS['third-place-cafe'],
     ],
-    targetPriority: [4, 5, 3, 0, 1, 2],
-    facadeTargetIndices: [3, 4, 5],
+    targetPriority: [6, 4, 5, 3, 0, 1, 2],
+    facadeTargetIndices: [3, 4, 5, 6],
   },
   building: {
     targetSrc: 'targets-building.mind',
@@ -80,6 +97,12 @@ export const MODES = {
     experiences: [{ ...LOCATIONS['poson-lantern'], targetIndices: [0, 1, 2] }],
     targetPriority: [0, 1, 2],
     facadeTargetIndices: [],
+  },
+  thirdplace: {
+    targetSrc: 'targets-thirdplace.mind',
+    experiences: [{ ...LOCATIONS['third-place-cafe'], targetIndices: [0] }],
+    targetPriority: [0],
+    facadeTargetIndices: [0],
   },
 };
 
