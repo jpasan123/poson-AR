@@ -87,7 +87,7 @@ function getFitBox(model, fitBounds) {
     if (meshBox.isEmpty()) return;
 
     const meshCenter = meshBox.getCenter(new THREE.Vector3());
-    if (meshCenter.y < -0.35) return;
+    if (meshCenter.y < -1.0) return;
 
     box.union(meshBox);
     found = true;
@@ -113,7 +113,7 @@ function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds) {
       model.position.y += size.y * 0.5;
       break;
     case 'facade':
-      model.position.y += size.y * (fitLift ?? 0.28);
+      model.position.y += size.y * (fitLift ?? 0.40);
       break;
     case 'center':
     default:
