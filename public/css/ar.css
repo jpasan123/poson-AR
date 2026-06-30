@@ -141,15 +141,31 @@ html, body {
 }
 
 .zoom-controls,
-.ar-controls {
+.ar-controls,
+.camera-controls {
   position: fixed;
-  right: max(1rem, env(safe-area-inset-right));
-  bottom: max(2rem, env(safe-area-inset-bottom));
   z-index: 200;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   pointer-events: none;
+}
+
+.camera-controls {
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(2rem, env(safe-area-inset-bottom));
+}
+
+.camera-controls.hidden { display: none; }
+
+.ar-controls {
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(2rem, env(safe-area-inset-bottom));
+}
+
+.zoom-controls {
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(2rem, env(safe-area-inset-bottom));
 }
 
 .zoom-controls.hidden,
@@ -179,6 +195,12 @@ html, body {
   pointer-events: none;
 }
 
+.ctrl-btn.active {
+  background: linear-gradient(135deg, #6b21a8, #a855f7);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
 .zoom-btn-reset,
 .ctrl-btn-reset { font-size: 1.1rem; }
 
@@ -195,6 +217,14 @@ html, body {
     top: 50%;
     transform: translateY(-50%);
     gap: 0.4rem;
+  }
+
+  .camera-controls {
+    left: max(0.75rem, env(safe-area-inset-left));
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: 140px;
   }
 
   .back-btn {

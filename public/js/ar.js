@@ -37,6 +37,8 @@ const getDefaultYOffset = (exp) => {
   return exp.defaultUserYOffset ?? AR_SETTINGS.defaultUserYOffset;
 };
 
+const getWorldScale = (exp) => exp?.worldScale ?? AR_SETTINGS.worldScaleDefault;
+
 const $ = (id) => document.getElementById(id);
 const show = (id) => $(id)?.classList.remove('hidden');
 const hide = (id) => $(id)?.classList.add('hidden');
@@ -153,7 +155,7 @@ function preventPageZoom() {
   });
   let lastTouchEnd = 0;
   document.addEventListener('touchend', (e) => {
-    if (e.target.closest('.ctrl-btn, .zoom-btn, .back-btn, .start-btn, .btn-ar')) return;
+    if (e.target.closest('.ctrl-btn, .zoom-btn, .back-btn, .start-btn, .btn-ar, .cam-btn')) return;
     if (Date.now() - lastTouchEnd < 300) e.preventDefault();
     lastTouchEnd = Date.now();
   }, { passive: false });
@@ -187,6 +189,72 @@ function createPositionControl() {
   };
 }
 
+function createCameraControls(getVideo) {
+  let torchOn = false;
+  let brightenOn = false;
+  let camZoom = AR_SETTINGS.minCameraZoom;
+  let videoTrack = null;
+
+  const refreshTrack = () => {
+    const video = getVideo();
+    const stream = video?.srcObject;
+    videoTrack = stream?.getVideoTracks?.()?.[0] ?? null;
+    return videoTrack;
+  };
+
+  const applyVideoStyle = () => {
+    const video = getVideo();
+    if (!video) return;
+    video.style.transform = camZoom !== 1 ? `scale(${camZoom})` : '';
+    video.style.transformOrigin = 'center center';
+    video.style.filter = brightenOn ? 'brightness(1.45) contrast(1.08)' : '';
+  };
+
+  const toggleTorch = async () => {
+    refreshTrack();
+    if (!videoTrack) return null;
+    torchOn = !torchOn;
+    const attempts = [
+      { advanced: [{ torch: torchOn }] },
+      { torch: torchOn },
+    ];
+    for (const constraints of attempts) {
+      try {
+        await videoTrack.applyConstraints(constraints);
+        return torchOn;
+      } catch { /* try next */ }
+    }
+    torchOn = false;
+    return null;
+  };
+
+  const toggleBrighten = () => {
+    brightenOn = !brightenOn;
+    applyVideoStyle();
+    return brightenOn;
+  };
+
+  const camZoomIn = () => {
+    camZoom = Math.min(camZoom + AR_SETTINGS.cameraZoomStep, AR_SETTINGS.maxCameraZoom);
+    applyVideoStyle();
+  };
+
+  const camZoomOut = () => {
+    camZoom = Math.max(camZoom - AR_SETTINGS.cameraZoomStep, AR_SETTINGS.minCameraZoom);
+    applyVideoStyle();
+  };
+
+  return {
+    refreshTrack,
+    toggleTorch,
+    toggleBrighten,
+    camZoomIn,
+    camZoomOut,
+    isTorchOn: () => torchOn,
+    isBrightenOn: () => brightenOn,
+  };
+}
+
 function bindButton(el, handler) {
   if (!el) return;
   let busy = false;
@@ -200,10 +268,6 @@ function bindButton(el, handler) {
   };
   el.addEventListener('pointerup', run, { passive: false });
   el.addEventListener('touchend', run, { passive: false });
-}
-
-function avgScale(vec) {
-  return Math.max((vec.x + vec.y + vec.z) / 3, 0.0001);
 }
 
 async function loadExperiences(loader, scaleGroup) {
@@ -306,9 +370,8 @@ async function initAR() {
   let hideTimer = null;
   let logoDelayTimer = null;
   const found = new Set();
-  let lockedWorldScale = null;
-  let calibrateCount = 0;
-  let calibrateSum = 0;
+  let posWarmup = 0;
+  let posReady = false;
   let renderLoop = null;
   let arRunning = false;
   let orientationBusy = false;
@@ -325,10 +388,12 @@ async function initAR() {
       throw err;
     });
 
+  const getVideo = () => document.querySelector('#ar-container video');
+  const cameraControls = createCameraControls(getVideo);
+
   const resetCalibration = () => {
-    lockedWorldScale = null;
-    calibrateCount = 0;
-    calibrateSum = 0;
+    posWarmup = 0;
+    posReady = false;
   };
 
   const applyMarkerOffsets = () => {
@@ -385,12 +450,13 @@ async function initAR() {
       await mindar.start();
       resizeAR();
 
-      const video = document.querySelector('#ar-container video');
+      const video = getVideo();
       if (video) {
         video.setAttribute('playsinline', '');
         video.setAttribute('webkit-playsinline', '');
         video.muted = true;
         await video.play().catch(() => {});
+        cameraControls.refreshTrack();
       }
     } catch (err) {
       console.error('AR orientation restart failed:', err);
@@ -541,19 +607,27 @@ async function initAR() {
   bindButton($('move-up'), () => position.moveUp());
   bindButton($('move-down'), () => position.moveDown());
 
+  bindButton($('torch-btn'), async () => {
+    const on = await cameraControls.toggleTorch();
+    $('torch-btn')?.classList.toggle('active', on === true);
+  });
+  bindButton($('bright-btn'), () => {
+    const on = cameraControls.toggleBrighten();
+    $('bright-btn')?.classList.toggle('active', on);
+  });
+  bindButton($('cam-zoom-in'), () => cameraControls.camZoomIn());
+  bindButton($('cam-zoom-out'), () => cameraControls.camZoomOut());
+
   function updateDisplayRig() {
     if (!activeSlot || !displayRig.visible) return;
 
     readMarkerPose(activeSlot.marker);
 
-    if (lockedWorldScale == null) {
-      calibrateSum += avgScale(_targetScale);
-      calibrateCount += 1;
-      if (calibrateCount >= AR_SETTINGS.calibrateFrames) {
-        lockedWorldScale = calibrateSum / calibrateCount;
-      }
+    if (!posReady) {
       _smoothPos.copy(_targetPos);
       _smoothQuat.copy(_targetQuat);
+      posWarmup += 1;
+      if (posWarmup >= AR_SETTINGS.posWarmupFrames) posReady = true;
     } else {
       _smoothPos.lerp(_targetPos, AR_SETTINGS.posSmooth);
       _smoothQuat.slerp(_targetQuat, AR_SETTINGS.rotSmooth);
@@ -564,10 +638,7 @@ async function initAR() {
     offsetRig.position.copy(_userOffset);
     displayRig.position.copy(_smoothPos);
     displayRig.quaternion.copy(_smoothQuat);
-
-    const base = lockedWorldScale
-      ?? (calibrateCount > 0 ? calibrateSum / calibrateCount : avgScale(_targetScale));
-    displayRig.scale.setScalar(Math.max(base, 0.0001) * zoom.getZoom());
+    displayRig.scale.setScalar(getWorldScale(activeSlot.experience) * zoom.getZoom());
   }
 
   const startBtn = $('start-btn');
@@ -579,12 +650,14 @@ async function initAR() {
       lastLandscape = isLandscape();
       resizeAR();
       applyMarkerOffsets();
-      const video = document.querySelector('#ar-container video');
+      show('camera-controls');
+      const video = getVideo();
       if (video) {
         video.setAttribute('playsinline', '');
         video.setAttribute('webkit-playsinline', '');
         video.muted = true;
         await video.play().catch(() => {});
+        cameraControls.refreshTrack();
       }
     } catch (err) {
       showError('Allow camera and try again.');

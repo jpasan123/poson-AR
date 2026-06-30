@@ -10,6 +10,7 @@ const LOCATIONS = {
     modelScale: 0.72,
     modelOffset: { x: 0, y: 0.05, z: 0.03 },
     fitMode: 'ground',
+    worldScale: 0.55,
     defaultUserZoom: 1,
     defaultUserYOffset: 0,
     landscape: {
@@ -25,6 +26,7 @@ const LOCATIONS = {
     modelOffset: { x: 0, y: 0.06, z: 0.03 },
     fitMode: 'facade',
     fitLift: 0.38,
+    worldScale: 0.58,
     defaultUserZoom: 1,
     defaultUserYOffset: 0,
     landscape: {
@@ -41,6 +43,7 @@ const LOCATIONS = {
     fitMode: 'facade',
     fitLift: 0.40,
     fitBounds: 'mesh',
+    worldScale: 0.56,
     defaultUserZoom: 1,
     defaultUserYOffset: 0.04,
     landscape: {
@@ -82,9 +85,10 @@ export const MODES = {
 };
 
 export const AR_SETTINGS = {
-  posSmooth: 0.14,
-  rotSmooth: 0.14,
-  calibrateFrames: 10,
+  posSmooth: 0.18,
+  rotSmooth: 0.18,
+  posWarmupFrames: 2,
+  worldScaleDefault: 0.55,
   defaultUserZoom: 1,
   minUserZoom: 0.55,
   maxUserZoom: 1.8,
@@ -93,10 +97,13 @@ export const AR_SETTINGS = {
   minUserYOffset: -0.3,
   maxUserYOffset: 0.35,
   positionStep: 0.06,
-  targetLostDelayMs: 400,
+  targetLostDelayMs: 280,
   filterMinCF: 0.0005,
   filterBeta: 0.008,
-  logoActivationDelayMs: 500,
+  logoActivationDelayMs: 180,
+  minCameraZoom: 1,
+  maxCameraZoom: 3,
+  cameraZoomStep: 0.25,
 };
 
 export function getMode() {

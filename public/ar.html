@@ -10,6 +10,7 @@
   <link rel="preload" href="targets.mind" as="fetch" crossorigin="anonymous" />
   <link rel="preload" href="assets/models/poson-lantern.glb" as="fetch" crossorigin="anonymous" />
   <link rel="preload" href="assets/models/jendo-building.glb" as="fetch" crossorigin="anonymous" />
+  <link rel="preload" href="assets/models/bay-12-place.glb" as="fetch" crossorigin="anonymous" />
   <link rel="stylesheet" href="css/ar.css" />
   <script type="importmap">
   {
@@ -51,15 +52,41 @@
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
   </button>
 
+  <div id="camera-controls" class="camera-controls hidden">
+    <button id="torch-btn" class="ctrl-btn cam-btn" type="button" aria-label="Flashlight">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.74V17h8v-2.26A7 7 0 0012 2z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <button id="bright-btn" class="ctrl-btn cam-btn" type="button" aria-label="Brighten camera">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <button id="cam-zoom-in" class="ctrl-btn cam-btn" type="button" aria-label="Camera zoom in">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M20 20l-4-4M11 8v6M8 11h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <button id="cam-zoom-out" class="ctrl-btn cam-btn" type="button" aria-label="Camera zoom out">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M20 20l-4-4M8 11h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
   <div id="ar-controls" class="ar-controls hidden">
     <button id="move-up" class="ctrl-btn" type="button" aria-label="Move up">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M12 5l7 7H5l7-7z" fill="currentColor"/>
       </svg>
     </button>
-    <button id="zoom-out" class="ctrl-btn" type="button" aria-label="Zoom out">−</button>
-    <button id="zoom-reset" class="ctrl-btn ctrl-btn-reset" type="button" aria-label="Reset">⟲</button>
-    <button id="zoom-in" class="ctrl-btn" type="button" aria-label="Zoom in">+</button>
+    <button id="zoom-out" class="ctrl-btn" type="button" aria-label="Model smaller">−</button>
+    <button id="zoom-reset" class="ctrl-btn ctrl-btn-reset" type="button" aria-label="Reset model">⟲</button>
+    <button id="zoom-in" class="ctrl-btn" type="button" aria-label="Model larger">+</button>
     <button id="move-down" class="ctrl-btn" type="button" aria-label="Move down">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M12 19l-7-7h14l-7 7z" fill="currentColor"/>
@@ -69,6 +96,6 @@
 
   <div id="ar-container"></div>
 
-  <script type="module" src="js/ar.js?v=16"></script>
+  <script type="module" src="js/ar.js?v=17"></script>
 </body>
 </html>
