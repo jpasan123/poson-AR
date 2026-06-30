@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { MindARThree } from 'mindar-image-three';
 import { AR_SETTINGS, getSetup, experienceForTarget, targetCount } from './ar-config.js';
 
@@ -66,20 +65,7 @@ function showError(message) {
   show('error-screen');
 }
 
-function preNormalizeModel(model) {
-  model.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(model);
-  if (box.isEmpty()) return;
-
-  const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  if (maxDim > 10) {
-    model.scale.setScalar(1 / maxDim);
-    model.updateMatrixWorld(true);
-  }
-}
-
-function prepareModel(scene, format = 'glb') {
+function prepareModel(scene) {
   scene.traverse((child) => {
     if (!child.isMesh) return;
     child.frustumCulled = false;
@@ -87,13 +73,8 @@ function prepareModel(scene, format = 'glb') {
     const mats = Array.isArray(child.material) ? child.material : [child.material];
     mats.forEach((mat) => {
       if (!mat) return;
-      mat.side = format === 'fbx' ? THREE.DoubleSide : THREE.FrontSide;
+      mat.side = THREE.FrontSide;
       mat.needsUpdate = true;
-
-      if (format === 'fbx' && mat.isMeshPhongMaterial) {
-        mat.shininess = Math.min(mat.shininess ?? 30, 35);
-        mat.specular?.setHex?.(0x333333);
-      }
 
       if (mat.map) {
         mat.map.colorSpace = THREE.SRGBColorSpace;
@@ -112,17 +93,9 @@ function prepareModel(scene, format = 'glb') {
 }
 
 async function loadModelAsset(src) {
-  const ext = src.split('?')[0].split('.').pop()?.toLowerCase();
-
-  if (ext === 'fbx') {
-    const object = await new FBXLoader().loadAsync(src);
-    object.animations = [];
-    console.info('[AR] Loaded FBX:', src);
-    return { scene: object, animations: [], format: 'fbx' };
-  }
-
   const gltf = await new GLTFLoader().loadAsync(src);
-  return { scene: gltf.scene, animations: gltf.animations ?? [], format: 'glb' };
+  console.info('[AR] Loaded GLB:', src);
+  return { scene: gltf.scene, animations: gltf.animations ?? [] };
 }
 
 async function loadModelForExperience(exp) {
@@ -346,10 +319,8 @@ async function loadExperiences(slots) {
     holder.name = exp.id;
 
     const model = asset.scene;
-    if (asset.format === 'fbx') preNormalizeModel(model);
-    prepareModel(model, asset.format);
+    prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
-    model.visible = true;
     holder.add(model);
 
     const slot = slotByExp.get(exp.id);
