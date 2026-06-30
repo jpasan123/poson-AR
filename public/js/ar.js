@@ -82,13 +82,53 @@ function sanitizeScene(scene) {
   remove.forEach((node) => node.parent?.remove(node));
 }
 
-function fixLogoOrientation(model) {
+function findLogoMesh(model) {
+  let logo = null;
   model.traverse((child) => {
-    const name = child.name || '';
-    if (!name.startsWith('tripo_node')) return;
-    child.rotation.set(0, 0, 0);
-    child.updateMatrixWorld(true);
+    if ((child.name || '').startsWith('tripo_node')) logo = child;
   });
+  return logo;
+}
+
+function mountLogoOnTower(model, exp) {
+  const logo = findLogoMesh(model);
+  const finial = model.getObjectByName('Finial_Ball');
+  if (!logo || !finial) return;
+
+  logo.parent?.remove(logo);
+
+  model.updateMatrixWorld(true);
+  const finialBox = new THREE.Box3().setFromObject(finial);
+  const top = finialBox.max.clone();
+  const center = finialBox.getCenter(new THREE.Vector3());
+  model.worldToLocal(top);
+  model.worldToLocal(center);
+
+  const offset = exp.logoOffset ?? { x: 0, y: 0.12, z: 0 };
+  const rot = exp.logoRotation ?? { x: -Math.PI / 2, y: Math.PI, z: 0 };
+
+  const anchor = new THREE.Group();
+  anchor.name = 'logo-anchor';
+  anchor.position.set(
+    center.x + offset.x,
+    top.y + offset.y,
+    center.z + offset.z,
+  );
+
+  logo.position.set(0, 0, 0);
+  logo.rotation.set(rot.x, rot.y, rot.z);
+  logo.updateMatrixWorld(true);
+
+  const mats = Array.isArray(logo.material) ? logo.material : [logo.material];
+  mats.forEach((mat) => {
+    if (!mat) return;
+    mat.side = THREE.DoubleSide;
+    mat.needsUpdate = true;
+  });
+
+  anchor.add(logo);
+  model.add(anchor);
+  model.updateMatrixWorld(true);
 }
 
 function stabilizeTowerPivot(model) {
@@ -380,10 +420,10 @@ async function loadExperiences(slots) {
     const model = asset.scene;
     sanitizeScene(model);
     stabilizeTowerPivot(model);
-    fixLogoOrientation(model);
     preNormalizeModel(model);
     prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
+    mountLogoOnTower(model, exp);
     holder.add(model);
 
     const slot = slotByExp.get(exp.id);
