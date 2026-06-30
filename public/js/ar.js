@@ -13,11 +13,20 @@ function isLowEndDevice() {
   const mem = navigator.deviceMemory;
   if (typeof mem === 'number' && mem <= 3) return true;
   const ua = navigator.userAgent.toLowerCase();
-  return /sm-g610|j7 prime|galaxy j7|android [4-7]\./.test(ua) || mem === undefined;
+  return /sm-g610|sm-j710|j7 prime|galaxy j7|android [4-5]\./.test(ua);
 }
 
 const LOW_END = isLowEndDevice();
 const ANDROID_LITE = IS_ANDROID;
+
+function hasWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
 
 const isLandscape = () => {
   const w = window.visualViewport?.width ?? window.innerWidth;
@@ -326,21 +335,34 @@ function prepareModel(scene) {
 }
 
 async function loadModelAsset(src, onProgress) {
-  return new Promise((resolve, reject) => {
-    const loader = new GLTFLoader();
-    loader.load(
-      src,
-      (gltf) => {
-        console.info('[AR] Loaded GLB:', src);
-        resolve({ scene: gltf.scene, animations: gltf.animations ?? [] });
-      },
-      (event) => {
-        if (!onProgress || !event.total) return;
-        onProgress(event.loaded / event.total);
-      },
-      (err) => reject(err),
-    );
-  });
+  const attempts = IS_ANDROID ? 3 : 1;
+  let lastErr;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await new Promise((resolve, reject) => {
+        const loader = new GLTFLoader();
+        loader.load(
+          src,
+          (gltf) => {
+            console.info('[AR] Loaded GLB:', src);
+            resolve({ scene: gltf.scene, animations: gltf.animations ?? [] });
+          },
+          (event) => {
+            if (!onProgress || !event.total) return;
+            onProgress(event.loaded / event.total);
+          },
+          (err) => reject(err),
+        );
+      });
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[AR] Load attempt ${attempt}/${attempts} failed:`, src, err);
+      if (attempt < attempts) {
+        await new Promise((r) => setTimeout(r, 1200 * attempt));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 async function loadModelForExperience(exp, onProgress) {
@@ -650,8 +672,13 @@ async function loadExperiences(slots, onProgress) {
 async function initAR() {
   preventPageZoom();
 
+  if (!hasWebGL()) {
+    showError('This phone does not support 3D (WebGL). Try Chrome or a newer phone.');
+    return;
+  }
+
   if (!navigator.mediaDevices?.getUserMedia) {
-    showError('Use Safari or Chrome on your phone.');
+    showError(IS_ANDROID ? 'Use Chrome on your Android phone.' : 'Use Safari or Chrome on your phone.');
     return;
   }
 
