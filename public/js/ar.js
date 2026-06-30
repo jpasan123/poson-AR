@@ -8,6 +8,17 @@ const EXPERIENCES = setup.experiences;
 const TARGET_PRIORITY = setup.targetPriority;
 const IS_ANDROID = /android/i.test(navigator.userAgent);
 
+function isLowEndDevice() {
+  if (!IS_ANDROID) return false;
+  const mem = navigator.deviceMemory;
+  if (typeof mem === 'number' && mem <= 3) return true;
+  const ua = navigator.userAgent.toLowerCase();
+  return /sm-g610|j7 prime|galaxy j7|android [4-7]\./.test(ua) || mem === undefined;
+}
+
+const LOW_END = isLowEndDevice();
+const ANDROID_LITE = IS_ANDROID;
+
 const isLandscape = () => {
   const w = window.visualViewport?.width ?? window.innerWidth;
   const h = window.visualViewport?.height ?? window.innerHeight;
@@ -47,6 +58,7 @@ function setLoadStatus(message) {
 }
 
 function prefetchModels(experiences) {
+  if (IS_ANDROID) return;
   experiences.forEach((exp) => {
     [exp.modelSrc].filter(Boolean).forEach((href) => {
       const link = document.createElement('link');
@@ -192,6 +204,97 @@ function preNormalizeModel(model) {
   }
 }
 
+function lightenMaterials(scene) {
+  scene.traverse((child) => {
+    if (!child.isMesh) return;
+    const name = (child.name || '').toLowerCase();
+    const isGlow = name.includes('glow') || name.includes('amber') || name.includes('lantern');
+
+    const convert = (mat) => {
+      if (!mat || mat.isMeshBasicMaterial) return mat;
+      const opts = {
+        map: mat.map,
+        color: mat.color,
+        side: mat.side ?? THREE.FrontSide,
+        transparent: mat.transparent,
+        opacity: mat.opacity ?? 1,
+      };
+      let next;
+      if (isGlow && mat.emissive) {
+        next = new THREE.MeshLambertMaterial({
+          ...opts,
+          emissive: mat.emissive,
+          emissiveIntensity: mat.emissiveIntensity ?? 1,
+        });
+      } else {
+        next = new THREE.MeshBasicMaterial(opts);
+      }
+      mat.normalMap?.dispose?.();
+      mat.roughnessMap?.dispose?.();
+      mat.metalnessMap?.dispose?.();
+      mat.aoMap?.dispose?.();
+      mat.dispose?.();
+      return next;
+    };
+
+    if (Array.isArray(child.material)) {
+      child.material = child.material.map(convert);
+    } else {
+      child.material = convert(child.material);
+    }
+  });
+}
+
+function simplifyLogoMesh(logo) {
+  const verts = logo.geometry?.attributes?.position?.count ?? 0;
+  if (!logo.isMesh || verts < 5000) return logo;
+
+  const srcMat = Array.isArray(logo.material) ? logo.material[0] : logo.material;
+  const map = srcMat?.map ?? null;
+  const plane = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 0.38),
+    new THREE.MeshBasicMaterial({
+      map,
+      side: THREE.DoubleSide,
+      depthWrite: true,
+      transparent: false,
+    }),
+  );
+  plane.name = logo.name;
+  plane.rotation.copy(logo.rotation);
+  plane.scale.copy(logo.scale);
+  plane.frustumCulled = false;
+  if (map) {
+    map.anisotropy = 1;
+    map.minFilter = THREE.LinearFilter;
+    map.generateMipmaps = false;
+    map.needsUpdate = true;
+  }
+  logo.geometry?.dispose?.();
+  srcMat?.dispose?.();
+  console.info('[AR] Logo GPU simplified:', verts, 'verts -> plane');
+  return plane;
+}
+
+function optimizeModelForDevice(model, logoMesh) {
+  if (!ANDROID_LITE) return logoMesh;
+  let logo = logoMesh;
+  if (logo) logo = simplifyLogoMesh(logo);
+  lightenMaterials(model);
+  if (logo?.isMesh) {
+    const mat = Array.isArray(logo.material) ? logo.material[0] : logo.material;
+    if (mat && !mat.isMeshBasicMaterial) {
+      logo.material = new THREE.MeshBasicMaterial({
+        map: mat.map,
+        side: THREE.DoubleSide,
+        depthWrite: true,
+      });
+      mat.dispose?.();
+    }
+  }
+  return logo;
+}
+
 function prepareModel(scene) {
   scene.traverse((child) => {
     if (!child.isMesh) return;
@@ -222,14 +325,59 @@ function prepareModel(scene) {
   });
 }
 
-async function loadModelAsset(src) {
-  const gltf = await new GLTFLoader().loadAsync(src);
-  console.info('[AR] Loaded GLB:', src);
-  return { scene: gltf.scene, animations: gltf.animations ?? [] };
+async function loadModelAsset(src, onProgress) {
+  return new Promise((resolve, reject) => {
+    const loader = new GLTFLoader();
+    loader.load(
+      src,
+      (gltf) => {
+        console.info('[AR] Loaded GLB:', src);
+        resolve({ scene: gltf.scene, animations: gltf.animations ?? [] });
+      },
+      (event) => {
+        if (!onProgress || !event.total) return;
+        onProgress(event.loaded / event.total);
+      },
+      (err) => reject(err),
+    );
+  });
 }
 
-async function loadModelForExperience(exp) {
-  return loadModelAsset(exp.modelSrc);
+async function loadModelForExperience(exp, onProgress) {
+  return loadModelAsset(exp.modelSrc, onProgress);
+}
+
+async function buildExperience(exp, slot, onProgress) {
+  const asset = await loadModelForExperience(exp, onProgress);
+  const holder = new THREE.Group();
+  holder.visible = false;
+  holder.name = exp.id;
+
+  const model = asset.scene;
+  sanitizeScene(model);
+  stabilizeTowerPivot(model);
+  let logoMesh = detachLogoForFitting(model);
+  preNormalizeModel(model);
+  prepareModel(model);
+  logoMesh = optimizeModelForDevice(model, logoMesh);
+  fitModel(
+    model,
+    exp.modelScale,
+    exp.fitMode ?? 'ground',
+    exp.fitLift,
+    exp.fitBounds,
+    exp.fitHeightFactor,
+  );
+  mountLogoOnTower(model, logoMesh, exp);
+  holder.add(model);
+
+  if (slot) slot.attachRig.add(holder);
+
+  const anim = exp.playAnimation === false
+    ? null
+    : setupAnimations(model, asset.animations, exp.animationExclude ?? []);
+
+  return { holder, anim };
 }
 
 function getFitBox(model, fitBounds) {
@@ -453,13 +601,13 @@ function bindButton(el, handler) {
 }
 
 function configureRenderer(renderer) {
-  const maxDpr = IS_ANDROID ? 1.25 : 1.5;
+  const maxDpr = LOW_END ? 1 : (IS_ANDROID ? 1.25 : 1.5);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(0x000000, 0);
   renderer.sortObjects = true;
   if (IS_ANDROID) {
-    renderer.powerPreference = 'high-performance';
+    renderer.powerPreference = LOW_END ? 'default' : 'high-performance';
   }
   const canvas = renderer.domElement;
   canvas.style.position = 'absolute';
@@ -468,9 +616,14 @@ function configureRenderer(renderer) {
   canvas.style.height = '100%';
   canvas.style.zIndex = '2';
   canvas.style.pointerEvents = 'none';
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    setLoadStatus('GPU busy — refresh and try again.');
+    console.warn('[AR] WebGL context lost');
+  }, false);
 }
 
-async function loadExperiences(slots) {
+async function loadExperiences(slots, onProgress) {
   const registry = new Map();
   const slotByExp = new Map();
   slots.forEach((slot) => {
@@ -480,46 +633,15 @@ async function loadExperiences(slots) {
 
   for (const exp of EXPERIENCES) {
     if (registry.has(exp.id)) continue;
-
-    let asset;
     try {
-      asset = await loadModelForExperience(exp);
+      const entry = await buildExperience(exp, slotByExp.get(exp.id), (pct) => {
+        onProgress?.(exp.id, pct);
+      });
+      registry.set(exp.id, entry);
+      if (IS_ANDROID) await new Promise((r) => setTimeout(r, 50));
     } catch (err) {
       console.error(`[AR] Failed to load model for ${exp.id}:`, err);
-      continue;
     }
-    const holder = new THREE.Group();
-    holder.visible = false;
-    holder.name = exp.id;
-
-    const model = asset.scene;
-    sanitizeScene(model);
-    stabilizeTowerPivot(model);
-    const logoMesh = detachLogoForFitting(model);
-    preNormalizeModel(model);
-    prepareModel(model);
-    fitModel(
-      model,
-      exp.modelScale,
-      exp.fitMode ?? 'ground',
-      exp.fitLift,
-      exp.fitBounds,
-      exp.fitHeightFactor,
-    );
-    mountLogoOnTower(model, logoMesh, exp);
-    holder.add(model);
-
-    const slot = slotByExp.get(exp.id);
-    if (slot) slot.attachRig.add(holder);
-
-    const anim = exp.playAnimation === false
-      ? null
-      : setupAnimations(model, asset.animations, exp.animationExclude ?? []);
-
-    registry.set(exp.id, {
-      holder,
-      anim,
-    });
   }
 
   return registry;
@@ -589,9 +711,10 @@ async function initAR() {
   let activeRegistry = null;
   const zoom = createZoomControl();
   const position = createPositionControl();
-  let expRegistry = null;
+  let expRegistry = new Map();
   let hideTimer = null;
   const found = new Set();
+  const loadingExps = new Set();
   let renderLoop = null;
   let arRunning = false;
   let orientationBusy = false;
@@ -632,12 +755,43 @@ async function initAR() {
     return true;
   };
 
-  const mountToSlot = (slot, expId) => {
-    if (!slot) return false;
-    if (!expRegistry) {
-      pendingActiveSlot = slot;
-      setLoadStatus('Loading 3D model…');
+  const slotByExp = new Map();
+  slots.forEach((slot) => {
+    const id = slot.experience?.id;
+    if (id && !slotByExp.has(id)) slotByExp.set(id, slot);
+  });
+
+  const ensureExperienceLoaded = async (expId) => {
+    if (expRegistry.has(expId)) return true;
+    if (loadingExps.has(expId)) return false;
+    const exp = EXPERIENCES.find((e) => e.id === expId);
+    if (!exp) return false;
+
+    loadingExps.add(expId);
+    setLoadStatus('Loading 3D model… 0%');
+    try {
+      const entry = await buildExperience(exp, slotByExp.get(expId), (pct) => {
+        setLoadStatus(`Loading 3D model… ${Math.round(pct * 100)}%`);
+      });
+      expRegistry.set(expId, entry);
+      setLoadStatus('');
+      return true;
+    } catch (err) {
+      console.error(`[AR] Load failed for ${expId}:`, err);
+      setLoadStatus('Model failed to load. Check Wi‑Fi and refresh.');
       return false;
+    } finally {
+      loadingExps.delete(expId);
+    }
+  };
+
+  const mountToSlot = async (slot, expId) => {
+    if (!slot) return false;
+    if (!expRegistry.has(expId)) {
+      pendingActiveSlot = slot;
+      const ok = await ensureExperienceLoaded(expId);
+      if (!ok) return false;
+      pendingActiveSlot = null;
     }
 
     const entry = expRegistry.get(expId);
@@ -653,37 +807,68 @@ async function initAR() {
     return true;
   };
 
-  const ensureActiveVisible = () => {
-    if (!activeSlot?.experience || !expRegistry || !found.has(activeSlot)) return;
-    mountToSlot(activeSlot, activeSlot.experience.id);
+  const ensureActiveVisible = async () => {
+    if (!activeSlot?.experience || !found.has(activeSlot)) return;
+    await mountToSlot(activeSlot, activeSlot.experience.id);
     if (activeRegistry?.holder) {
       activeRegistry.holder.visible = true;
       activeRegistry.holder.traverse((child) => { child.visible = true; });
     }
   };
 
-  hide('loading-screen');
-  show('start-screen');
-  setLoadStatus('Loading 3D model…');
-
-  const modelReady = loadExperiences(slots)
-    .then((registry) => {
-      expRegistry = registry;
-      setLoadStatus('');
-      if (pendingActiveSlot) {
-        const slot = pendingActiveSlot;
-        pendingActiveSlot = null;
-        activeSlot = slot;
-        mountToSlot(slot, slot.experience.id);
-        ensureActiveVisible();
-        show('ar-controls');
+  const showStartWhenReady = async () => {
+    if (IS_ANDROID && setup.mode !== 'all') {
+      setLoadStatus('Loading 3D model… 0%');
+      try {
+        expRegistry = await loadExperiences(slots, (expId, pct) => {
+          setLoadStatus(`Loading 3D model… ${Math.round(pct * 100)}%`);
+        });
+        if (expRegistry.size === 0) {
+          setLoadStatus('Model failed to load. Check Wi‑Fi and refresh.');
+          return;
+        }
+      } catch (err) {
+        console.error('Model load failed:', err);
+        setLoadStatus('Model failed to load. Check Wi‑Fi and refresh.');
+        return;
       }
-      return registry;
-    })
-    .catch((err) => {
-      console.error('Model load failed:', err);
-      setLoadStatus('Model failed to load. Refresh and try again.');
-    });
+    }
+    hide('loading-screen');
+    show('start-screen');
+    setLoadStatus(IS_ANDROID ? 'Ready — tap to start' : '');
+  };
+
+  if (IS_ANDROID && setup.mode !== 'all') {
+    show('loading-screen');
+    const titleEl = document.querySelector('#loading-screen .loader-title');
+    if (titleEl) titleEl.textContent = 'Loading 3D model…';
+  } else {
+    hide('loading-screen');
+    show('start-screen');
+  }
+  setLoadStatus(IS_ANDROID ? 'Loading 3D model…' : 'Loading 3D model…');
+
+  const modelReady = IS_ANDROID
+    ? showStartWhenReady()
+    : loadExperiences(slots, (expId, pct) => {
+        setLoadStatus(`Loading 3D model… ${Math.round(pct * 100)}%`);
+      }).then((registry) => {
+        expRegistry = registry;
+        setLoadStatus('');
+        if (pendingActiveSlot) {
+          const slot = pendingActiveSlot;
+          pendingActiveSlot = null;
+          activeSlot = slot;
+          return mountToSlot(slot, slot.experience.id).then(() => {
+            ensureActiveVisible();
+            show('ar-controls');
+          });
+        }
+        return registry;
+      }).catch((err) => {
+        console.error('Model load failed:', err);
+        setLoadStatus('Model failed to load. Refresh and try again.');
+      });
 
   const applyMarkerOffsets = () => {
     slots.forEach((slot) => {
@@ -787,7 +972,7 @@ async function initAR() {
 
   try { screen.orientation?.unlock?.(); } catch { /* ignore */ }
 
-  const setActive = (slot) => {
+  const setActive = async (slot) => {
     if (!slot?.experience) {
       activeSlot = null;
       hideAllHolders();
@@ -801,19 +986,19 @@ async function initAR() {
     }
 
     activeSlot = slot;
-    const mounted = mountToSlot(slot, slot.experience.id);
-    if (mounted || !expRegistry) show('ar-controls');
+    const mounted = await mountToSlot(slot, slot.experience.id);
+    if (mounted) show('ar-controls');
   };
 
   const pickActive = () => {
     for (const idx of TARGET_PRIORITY) {
       const slot = slots.find((s) => s.targetIndex === idx && found.has(s));
       if (slot) {
-        setActive(slot);
+        void setActive(slot);
         return;
       }
     }
-    setActive(null);
+    void setActive(null);
   };
 
   slots.forEach((slot) => {
@@ -821,7 +1006,6 @@ async function initAR() {
       clearTimeout(hideTimer);
       found.add(slot);
       pickActive();
-      ensureActiveVisible();
     };
     slot.anchor.onTargetLost = () => {
       found.delete(slot);
@@ -899,7 +1083,6 @@ async function initAR() {
       const clock = new THREE.Clock();
       renderLoop = () => {
         const delta = Math.min(clock.getDelta(), 0.032);
-        ensureActiveVisible();
         if (activeRegistry?.anim && activeRegistry.holder.visible) {
           activeRegistry.anim.update(delta);
         }
