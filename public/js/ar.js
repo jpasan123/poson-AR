@@ -1032,6 +1032,9 @@ async function initAR() {
     slot.anchor.onTargetFound = () => {
       clearTimeout(hideTimer);
       found.add(slot);
+      window.dispatchEvent(new CustomEvent('ar:target_found', {
+        detail: { expId: slot.experience?.id || '', targetIndex: slot.targetIndex },
+      }));
       pickActive();
     };
     slot.anchor.onTargetLost = () => {
@@ -1091,6 +1094,7 @@ async function initAR() {
       resizeAR();
       applyMarkerOffsets();
       show('camera-controls');
+      window.dispatchEvent(new CustomEvent('ar:started', { detail: { mode: setup.mode } }));
       const video = getVideo();
       if (video) {
         video.style.zIndex = '1';
