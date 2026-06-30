@@ -81,11 +81,6 @@ export const MODES = {
 };
 
 export const AR_SETTINGS = {
-  posSmooth: 0.11,
-  rotSmooth: 0.11,
-  scaleCalibrateFrames: 4,
-  scaleCap: 1.05,
-  scaleFloor: 0.38,
   defaultUserZoom: 1,
   minUserZoom: 0.55,
   maxUserZoom: 1.8,
@@ -94,10 +89,9 @@ export const AR_SETTINGS = {
   minUserYOffset: -0.3,
   maxUserYOffset: 0.35,
   positionStep: 0.06,
-  targetLostDelayMs: 500,
-  filterMinCF: 0.003,
-  filterBeta: 0.0015,
-  logoActivationDelayMs: 0,
+  targetLostDelayMs: 400,
+  filterMinCF: 0.001,
+  filterBeta: 0.007,
   minCameraZoom: 1,
   maxCameraZoom: 3,
   cameraZoomStep: 0.25,

@@ -40,20 +40,6 @@ const $ = (id) => document.getElementById(id);
 const show = (id) => $(id)?.classList.remove('hidden');
 const hide = (id) => $(id)?.classList.add('hidden');
 
-const _targetPos = new THREE.Vector3();
-const _targetQuat = new THREE.Quaternion();
-const _targetScale = new THREE.Vector3();
-const _smoothPos = new THREE.Vector3();
-const _smoothQuat = new THREE.Quaternion();
-
-const markerScaleAvg = (vec) => Math.max((vec.x + vec.y + vec.z) / 3, 0.0001);
-
-const clampDisplayScale = (raw, exp) => {
-  const cap = exp?.scaleCap ?? AR_SETTINGS.scaleCap;
-  const floor = exp?.scaleFloor ?? AR_SETTINGS.scaleFloor;
-  return THREE.MathUtils.clamp(raw, floor, cap);
-};
-
 function showError(message) {
   hide('loading-screen');
   hide('start-screen');
@@ -274,8 +260,13 @@ function bindButton(el, handler) {
   el.addEventListener('touchend', run, { passive: false });
 }
 
-async function loadExperiences(loader, offsetRig) {
+async function loadExperiences(loader, slots) {
   const registry = new Map();
+  const slotByExp = new Map();
+  slots.forEach((slot) => {
+    const id = slot.experience?.id;
+    if (id && !slotByExp.has(id)) slotByExp.set(id, slot);
+  });
 
   await Promise.all(EXPERIENCES.map(async (exp) => {
     if (registry.has(exp.id)) return;
@@ -289,7 +280,9 @@ async function loadExperiences(loader, offsetRig) {
     prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
     holder.add(model);
-    offsetRig.add(holder);
+
+    const slot = slotByExp.get(exp.id);
+    if (slot) slot.attachRig.add(holder);
 
     registry.set(exp.id, {
       holder,
@@ -337,22 +330,18 @@ async function initAR() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-  const displayRig = new THREE.Group();
-  displayRig.visible = false;
-  scene.add(displayRig);
-
-  const offsetRig = new THREE.Group();
-  displayRig.add(offsetRig);
-
   const slots = [];
   for (let i = 0; i < slotCount; i++) {
     const exp = experienceForTarget(EXPERIENCES, i);
     const anchor = mindar.addAnchor(i);
     const marker = new THREE.Object3D();
+    const attachRig = new THREE.Group();
+    attachRig.name = 'attach-rig';
     const off = getMarkerOffset(exp);
     marker.position.set(off.x, off.y, off.z);
+    marker.add(attachRig);
     anchor.group.add(marker);
-    slots.push({ anchor, marker, targetIndex: i, experience: exp });
+    slots.push({ anchor, marker, attachRig, targetIndex: i, experience: exp });
   }
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.5));
@@ -371,55 +360,39 @@ async function initAR() {
   let arRunning = false;
   let orientationBusy = false;
   let lastLandscape = isLandscape();
-
   let pendingActiveSlot = null;
-  let lockedWorldScale = null;
-  let scaleSamples = [];
-  let poseSynced = false;
-
-  const glbReady = loadExperiences(new GLTFLoader(), offsetRig)
-    .then((registry) => {
-      expRegistry = registry;
-      hide('loading-screen');
-      show('start-screen');
-      if (pendingActiveSlot) {
-        const slot = pendingActiveSlot;
-        pendingActiveSlot = null;
-        mountToSlot(slot, slot.experience.id);
-      }
-      return registry;
-    })
-    .catch((err) => {
-      console.error(err);
-      showError('3D model failed to load.');
-      throw err;
-    });
 
   const getVideo = () => document.querySelector('#ar-container video');
   const cameraControls = createCameraControls(getVideo);
 
-
-  const resetPoseSync = () => {
-    lockedWorldScale = null;
-    scaleSamples = [];
-    poseSynced = false;
+  const applyUserTransform = (slot) => {
+    if (!slot) return;
+    slot.attachRig.position.set(0, position.getYOffset(), 0);
+    slot.attachRig.scale.setScalar(zoom.getZoom());
   };
 
-  const readMarkerPose = (marker) => {
-    marker.updateWorldMatrix(true, false);
-    marker.getWorldPosition(_targetPos);
-    marker.getWorldQuaternion(_targetQuat);
-    marker.getWorldScale(_targetScale);
-  };
-
-  const detachAllHolders = () => {
+  const hideAllHolders = () => {
     if (!expRegistry) return;
     expRegistry.forEach((entry) => {
       entry.holder.visible = false;
       entry.anim?.pause();
     });
     activeRegistry = null;
-    displayRig.visible = false;
+  };
+
+  const showExperience = (expId) => {
+    if (!expRegistry) return false;
+    const entry = expRegistry.get(expId);
+    if (!entry) return false;
+
+    expRegistry.forEach((item) => {
+      const on = item === entry;
+      item.holder.visible = on;
+      if (on) item.anim?.play();
+      else item.anim?.pause();
+    });
+    activeRegistry = entry;
+    return true;
   };
 
   const mountToSlot = (slot, expId) => {
@@ -432,17 +405,34 @@ async function initAR() {
     const entry = expRegistry.get(expId);
     if (!entry) return false;
 
-    expRegistry.forEach((item) => {
-      const on = item === entry;
-      item.holder.visible = on;
-      if (on) item.anim?.play();
-      else item.anim?.pause();
-    });
+    if (entry.holder.parent !== slot.attachRig) {
+      slot.attachRig.add(entry.holder);
+    }
 
-    activeRegistry = entry;
-    displayRig.visible = true;
+    showExperience(expId);
+    applyUserTransform(slot);
     return true;
   };
+
+  const glbReady = loadExperiences(new GLTFLoader(), slots)
+    .then((registry) => {
+      expRegistry = registry;
+      hide('loading-screen');
+      show('start-screen');
+      if (pendingActiveSlot) {
+        const slot = pendingActiveSlot;
+        pendingActiveSlot = null;
+        activeSlot = slot;
+        mountToSlot(slot, slot.experience.id);
+        show('ar-controls');
+      }
+      return registry;
+    })
+    .catch((err) => {
+      console.error(err);
+      showError('3D model failed to load.');
+      throw err;
+    });
 
   const applyMarkerOffsets = () => {
     slots.forEach((slot) => {
@@ -481,12 +471,10 @@ async function initAR() {
     orientationBusy = true;
 
     try {
-      detachAllHolders();
+      hideAllHolders();
       found.clear();
       clearTimeout(hideTimer);
-      resetPoseSync();
       activeSlot = null;
-      activeRegistry = null;
 
       await mindar.stop();
       await new Promise((r) => setTimeout(r, 120));
@@ -527,10 +515,9 @@ async function initAR() {
         if (activeSlot?.experience) {
           zoom.resetFor(activeSlot.experience);
           position.resetFor(activeSlot.experience);
+          applyUserTransform(activeSlot);
         }
-        resetPoseSync();
         await restartAR();
-        return;
       }
     }, 500);
   };
@@ -551,17 +538,14 @@ async function initAR() {
   const setActive = (slot) => {
     if (!slot?.experience) {
       activeSlot = null;
-      detachAllHolders();
+      hideAllHolders();
       hide('ar-controls');
       return;
     }
 
     if (activeSlot?.experience?.id !== slot.experience.id) {
-      resetPoseSync();
       zoom.resetFor(slot.experience);
       position.resetFor(slot.experience);
-    } else if (activeSlot !== slot) {
-      resetPoseSync();
     }
 
     activeSlot = slot;
@@ -597,16 +581,29 @@ async function initAR() {
     };
   });
 
-  bindButton($('zoom-in'), () => zoom.zoomIn());
-  bindButton($('zoom-out'), () => zoom.zoomOut());
+  bindButton($('zoom-in'), () => {
+    zoom.zoomIn();
+    applyUserTransform(activeSlot);
+  });
+  bindButton($('zoom-out'), () => {
+    zoom.zoomOut();
+    applyUserTransform(activeSlot);
+  });
   bindButton($('zoom-reset'), () => {
     if (activeSlot?.experience) {
       zoom.resetFor(activeSlot.experience);
       position.resetFor(activeSlot.experience);
+      applyUserTransform(activeSlot);
     }
   });
-  bindButton($('move-up'), () => position.moveUp());
-  bindButton($('move-down'), () => position.moveDown());
+  bindButton($('move-up'), () => {
+    position.moveUp();
+    applyUserTransform(activeSlot);
+  });
+  bindButton($('move-down'), () => {
+    position.moveDown();
+    applyUserTransform(activeSlot);
+  });
 
   bindButton($('torch-btn'), async () => {
     const on = await cameraControls.toggleTorch();
@@ -618,44 +615,6 @@ async function initAR() {
   });
   bindButton($('cam-zoom-in'), () => cameraControls.camZoomIn());
   bindButton($('cam-zoom-out'), () => cameraControls.camZoomOut());
-
-  function updateDisplayRig() {
-    if (!activeSlot || !displayRig.visible) return;
-
-    readMarkerPose(activeSlot.marker);
-    const rawScale = markerScaleAvg(_targetScale);
-
-    if (lockedWorldScale == null) {
-      scaleSamples.push(rawScale);
-      if (scaleSamples.length >= AR_SETTINGS.scaleCalibrateFrames) {
-        const sorted = [...scaleSamples].sort((a, b) => a - b);
-        const median = sorted[Math.floor(sorted.length / 2)];
-        lockedWorldScale = clampDisplayScale(median, activeSlot.experience);
-      }
-    }
-
-    if (!poseSynced) {
-      _smoothPos.copy(_targetPos);
-      _smoothQuat.copy(_targetQuat);
-      poseSynced = true;
-    } else {
-      _smoothPos.lerp(_targetPos, AR_SETTINGS.posSmooth);
-      _smoothQuat.slerp(_targetQuat, AR_SETTINGS.rotSmooth);
-    }
-
-    offsetRig.position.set(0, position.getYOffset(), 0);
-    displayRig.position.copy(_smoothPos);
-    displayRig.quaternion.copy(_smoothQuat);
-
-    const baseScale = lockedWorldScale
-      ?? clampDisplayScale(
-        scaleSamples.length
-          ? scaleSamples.reduce((a, b) => a + b, 0) / scaleSamples.length
-          : rawScale,
-        activeSlot.experience,
-      );
-    displayRig.scale.setScalar(baseScale * zoom.getZoom());
-  }
 
   const startBtn = $('start-btn');
   startBtn.disabled = true;
@@ -687,9 +646,8 @@ async function initAR() {
     if (!renderLoop) {
       const clock = new THREE.Clock();
       renderLoop = () => {
-        updateDisplayRig();
         const delta = Math.min(clock.getDelta(), 0.032);
-        if (displayRig.visible && activeRegistry?.anim) {
+        if (activeRegistry?.anim && activeRegistry.holder.visible) {
           activeRegistry.anim.update(delta);
         }
         renderer.render(scene, camera);
