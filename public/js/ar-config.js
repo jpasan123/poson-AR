@@ -41,8 +41,8 @@ const LOCATIONS = {
     fitMode: 'facade',
     fitLift: 0.45,
     animationExclude: ['Main_Pivot'],
-    logoRotation: { x: -1.5708, y: 3.1416, z: 0 },
-    logoOffset: { x: 0, y: 0.12, z: 0 },
+    logoRotation: { x: 0, y: 1.5708, z: 0 },
+    logoOffset: { x: 0, y: 0.06, z: 0 },
     defaultUserZoom: 0.88,
     defaultUserYOffset: 0,
     landscape: {

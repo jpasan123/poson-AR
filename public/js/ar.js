@@ -97,38 +97,52 @@ function mountLogoOnTower(model, exp) {
 
   logo.parent?.remove(logo);
 
-  model.updateMatrixWorld(true);
-  const finialBox = new THREE.Box3().setFromObject(finial);
-  const top = finialBox.max.clone();
-  const center = finialBox.getCenter(new THREE.Vector3());
-  model.worldToLocal(top);
-  model.worldToLocal(center);
-
-  const offset = exp.logoOffset ?? { x: 0, y: 0.12, z: 0 };
-  const rot = exp.logoRotation ?? { x: -Math.PI / 2, y: Math.PI, z: 0 };
-
-  const anchor = new THREE.Group();
-  anchor.name = 'logo-anchor';
-  anchor.position.set(
-    center.x + offset.x,
-    top.y + offset.y,
-    center.z + offset.z,
-  );
-
+  // Logo mesh is a YZ-plane billboard — rotate to face the AR camera horizontally.
+  const rot = exp.logoRotation ?? { x: 0, y: Math.PI / 2, z: 0 };
   logo.position.set(0, 0, 0);
   logo.rotation.set(rot.x, rot.y, rot.z);
   logo.updateMatrixWorld(true);
+
+  const finialBox = new THREE.Box3().setFromObject(finial);
+  const finialSize = finialBox.getSize(new THREE.Vector3());
+  const logoBox = new THREE.Box3().setFromObject(logo);
+  const logoSize = logoBox.getSize(new THREE.Vector3());
+  const targetWidth = Math.max(finialSize.x, finialSize.z) * 1.05;
+  const currentWidth = Math.max(logoSize.x, logoSize.z);
+  if (currentWidth > 0.001) {
+    logo.scale.multiplyScalar(targetWidth / currentWidth);
+  }
 
   const mats = Array.isArray(logo.material) ? logo.material : [logo.material];
   mats.forEach((mat) => {
     if (!mat) return;
     mat.side = THREE.DoubleSide;
+    mat.depthWrite = true;
     mat.needsUpdate = true;
   });
 
+  const anchor = new THREE.Group();
+  anchor.name = 'logo-anchor';
+  const offset = exp.logoOffset ?? { x: 0, y: 0.06, z: 0 };
+  anchor.position.set(offset.x, finialSize.y * 0.5 + offset.y, offset.z);
+
   anchor.add(logo);
-  model.add(anchor);
+  finial.add(anchor);
+  logo.visible = true;
   model.updateMatrixWorld(true);
+}
+
+function detachLogoForFitting(model) {
+  const logo = findLogoMesh(model);
+  if (!logo) return null;
+  const saved = {
+    parent: logo.parent,
+    position: logo.position.clone(),
+    rotation: logo.rotation.clone(),
+    scale: logo.scale.clone(),
+  };
+  logo.parent?.remove(logo);
+  return saved;
 }
 
 function stabilizeTowerPivot(model) {
@@ -193,7 +207,14 @@ function getFitBox(model, fitBounds) {
   model.updateMatrixWorld(true);
 
   if (fitBounds !== 'mesh') {
-    return new THREE.Box3().setFromObject(model);
+    const box = new THREE.Box3();
+    model.traverse((child) => {
+      if (!child.isMesh) return;
+      const name = (child.name || '').toLowerCase();
+      if (name.startsWith('tripo_node')) return;
+      box.union(new THREE.Box3().setFromObject(child));
+    });
+    return box.isEmpty() ? new THREE.Box3().setFromObject(model) : box;
   }
 
   const box = new THREE.Box3();
@@ -203,6 +224,7 @@ function getFitBox(model, fitBounds) {
 
     const name = (child.name || '').toLowerCase();
     if (name.includes('camera') || name.includes('light')) return;
+    if (name.startsWith('tripo_node')) return;
 
     const meshBox = new THREE.Box3().setFromObject(child);
     if (meshBox.isEmpty()) return;
@@ -420,6 +442,7 @@ async function loadExperiences(slots) {
     const model = asset.scene;
     sanitizeScene(model);
     stabilizeTowerPivot(model);
+    detachLogoForFitting(model);
     preNormalizeModel(model);
     prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
