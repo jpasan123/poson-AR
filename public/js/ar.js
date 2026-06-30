@@ -48,7 +48,7 @@ function setLoadStatus(message) {
 
 function prefetchModels(experiences) {
   experiences.forEach((exp) => {
-    [exp.modelSrc, exp.modelFallback].filter(Boolean).forEach((href) => {
+    [exp.modelSrc].filter(Boolean).forEach((href) => {
       const link = document.createElement('link');
       link.rel = 'prefetch';
       link.as = 'fetch';
@@ -98,21 +98,16 @@ async function loadModelAsset(src) {
   if (ext === 'fbx') {
     const object = await new FBXLoader().loadAsync(src);
     object.animations = [];
-    return { scene: object, animations: [] };
+    console.info('[AR] Loaded FBX:', src);
+    return { scene: object, animations: [], format: 'fbx' };
   }
 
   const gltf = await new GLTFLoader().loadAsync(src);
-  return { scene: gltf.scene, animations: gltf.animations ?? [] };
+  return { scene: gltf.scene, animations: gltf.animations ?? [], format: 'glb' };
 }
 
 async function loadModelForExperience(exp) {
-  try {
-    return await loadModelAsset(exp.modelSrc);
-  } catch (err) {
-    if (!exp.modelFallback) throw err;
-    console.warn(`Using fallback model for ${exp.id}`, err);
-    return await loadModelAsset(exp.modelFallback);
-  }
+  return loadModelAsset(exp.modelSrc);
 }
 
 function getFitBox(model, fitBounds) {
