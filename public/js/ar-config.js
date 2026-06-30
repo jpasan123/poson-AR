@@ -40,7 +40,7 @@ const LOCATIONS = {
     modelOffset: { x: 0, y: 0.06, z: 0.05 },
     fitMode: 'facade',
     fitLift: 0.45,
-    playAnimation: false,
+    animationExclude: ['Main_Pivot'],
     defaultUserZoom: 0.88,
     defaultUserYOffset: 0,
     landscape: {

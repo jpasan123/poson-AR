@@ -82,13 +82,21 @@ function sanitizeScene(scene) {
   remove.forEach((node) => node.parent?.remove(node));
 }
 
-function applyStaticPose(model) {
+function fixLogoOrientation(model) {
+  model.traverse((child) => {
+    const name = child.name || '';
+    if (!name.startsWith('tripo_node')) return;
+    child.rotation.set(0, 0, 0);
+    child.updateMatrixWorld(true);
+  });
+}
+
+function stabilizeTowerPivot(model) {
   const pivot = model.getObjectByName('Main_Pivot');
-  if (pivot) {
-    pivot.rotation.set(0, 0, 0);
-    pivot.quaternion.identity();
-  }
-  model.updateMatrixWorld(true);
+  if (!pivot) return;
+  pivot.rotation.set(0, 0, 0);
+  pivot.quaternion.identity();
+  pivot.updateMatrixWorld(true);
 }
 
 function preNormalizeModel(model) {
@@ -202,16 +210,28 @@ function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds) {
   model.scale.setScalar(modelScale / Math.max(scaleBase, 0.0001));
 }
 
-function setupAnimations(root, clips) {
+function setupAnimations(root, clips, excludeTracks = []) {
   if (!clips?.length) return null;
 
   const mixer = new THREE.AnimationMixer(root);
-  const actions = clips.map((clip) => {
-    const action = mixer.clipAction(clip);
+  const actions = [];
+
+  clips.forEach((clip) => {
+    const tracks = clip.tracks.filter(
+      (track) => !excludeTracks.some((key) => track.name.includes(key)),
+    );
+    if (!tracks.length) return;
+
+    const filtered = tracks.length === clip.tracks.length
+      ? clip
+      : new THREE.AnimationClip(clip.name, clip.duration, tracks);
+    const action = mixer.clipAction(filtered);
     action.setLoop(THREE.LoopRepeat);
     action.play();
-    return action;
+    actions.push(action);
   });
+
+  if (!actions.length) return null;
 
   return {
     update(delta) { mixer.update(delta); },
@@ -359,7 +379,8 @@ async function loadExperiences(slots) {
 
     const model = asset.scene;
     sanitizeScene(model);
-    applyStaticPose(model);
+    stabilizeTowerPivot(model);
+    fixLogoOrientation(model);
     preNormalizeModel(model);
     prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
@@ -370,7 +391,7 @@ async function loadExperiences(slots) {
 
     const anim = exp.playAnimation === false
       ? null
-      : setupAnimations(model, asset.animations);
+      : setupAnimations(model, asset.animations, exp.animationExclude ?? []);
 
     registry.set(exp.id, {
       holder,
