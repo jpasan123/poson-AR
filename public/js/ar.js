@@ -6,7 +6,6 @@ import { AR_SETTINGS, getSetup, experienceForTarget, targetCount } from './ar-co
 const setup = getSetup();
 const EXPERIENCES = setup.experiences;
 const TARGET_PRIORITY = setup.targetPriority;
-const FACADE_INDICES = new Set(setup.facadeTargetIndices);
 
 const isLandscape = () => {
   const w = window.visualViewport?.width ?? window.innerWidth;
@@ -263,8 +262,13 @@ function bindButton(el, handler) {
   el.addEventListener('touchend', run, { passive: false });
 }
 
-async function loadExperiences(loader) {
+async function loadExperiences(loader, slots) {
   const registry = new Map();
+  const slotByExp = new Map();
+  slots.forEach((slot) => {
+    const id = slot.experience?.id;
+    if (id && !slotByExp.has(id)) slotByExp.set(id, slot);
+  });
 
   await Promise.all(EXPERIENCES.map(async (exp) => {
     if (registry.has(exp.id)) return;
@@ -279,9 +283,13 @@ async function loadExperiences(loader) {
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
     holder.add(model);
 
+    const slot = slotByExp.get(exp.id);
+    if (slot) slot.attachRig.add(holder);
+
     registry.set(exp.id, {
       holder,
       anim: setupAnimations(model, gltf.animations),
+      defaultSlot: slot ?? null,
     });
   }));
 
@@ -300,9 +308,6 @@ async function initAR() {
     showError('HTTPS required.');
     return;
   }
-
-  hide('loading-screen');
-  show('start-screen');
 
   const slotCount = targetCount(EXPERIENCES);
   const maxTrack = setup.mode === 'all' ? 2 : Math.min(slotCount, 3);
@@ -353,16 +358,24 @@ async function initAR() {
   const position = createPositionControl();
   let expRegistry = null;
   let hideTimer = null;
-  let logoDelayTimer = null;
   const found = new Set();
   let renderLoop = null;
   let arRunning = false;
   let orientationBusy = false;
   let lastLandscape = isLandscape();
 
-  const glbReady = loadExperiences(new GLTFLoader())
+  let pendingActiveSlot = null;
+
+  const glbReady = loadExperiences(new GLTFLoader(), slots)
     .then((registry) => {
       expRegistry = registry;
+      hide('loading-screen');
+      show('start-screen');
+      if (pendingActiveSlot) {
+        const slot = pendingActiveSlot;
+        pendingActiveSlot = null;
+        mountToSlot(slot, slot.experience.id);
+      }
       return registry;
     })
     .catch((err) => {
@@ -378,7 +391,6 @@ async function initAR() {
   const detachAllHolders = () => {
     if (!expRegistry) return;
     expRegistry.forEach((entry) => {
-      if (entry.holder.parent) entry.holder.parent.remove(entry.holder);
       entry.holder.visible = false;
       entry.anim?.pause();
     });
@@ -392,14 +404,26 @@ async function initAR() {
   };
 
   const mountToSlot = (slot, expId) => {
-    if (!expRegistry || !slot) return false;
+    if (!slot) return false;
+    if (!expRegistry) {
+      pendingActiveSlot = slot;
+      return false;
+    }
+
     const entry = expRegistry.get(expId);
     if (!entry) return false;
 
-    detachAllHolders();
-    slot.attachRig.add(entry.holder);
-    entry.holder.visible = true;
-    entry.anim?.play();
+    if (entry.holder.parent !== slot.attachRig) {
+      slot.attachRig.add(entry.holder);
+    }
+
+    expRegistry.forEach((item) => {
+      const on = item === entry;
+      item.holder.visible = on;
+      if (on) item.anim?.play();
+      else item.anim?.pause();
+    });
+
     activeRegistry = entry;
     applyUserTransform(slot);
     return true;
@@ -445,7 +469,6 @@ async function initAR() {
       detachAllHolders();
       found.clear();
       clearTimeout(hideTimer);
-      clearTimeout(logoDelayTimer);
       activeSlot = null;
       activeRegistry = null;
 
@@ -523,19 +546,9 @@ async function initAR() {
     }
 
     activeSlot = slot;
-    if (!mountToSlot(slot, slot.experience.id)) {
-      glbReady.then(() => {
-        if (activeSlot === slot) mountToSlot(slot, slot.experience.id);
-      });
-    }
+    mountToSlot(slot, slot.experience.id);
     show('ar-controls');
   };
-
-  const isLogoTarget = (index) => !FACADE_INDICES.has(index);
-
-  const hasFacadeFound = () => slots.some(
-    (s) => FACADE_INDICES.has(s.targetIndex) && found.has(s),
-  );
 
   const pickActive = () => {
     for (const idx of TARGET_PRIORITY) {
@@ -552,21 +565,6 @@ async function initAR() {
     slot.anchor.onTargetFound = () => {
       clearTimeout(hideTimer);
       found.add(slot);
-
-      if (FACADE_INDICES.has(slot.targetIndex)) {
-        clearTimeout(logoDelayTimer);
-        pickActive();
-        return;
-      }
-
-      if (setup.mode === 'all' && isLogoTarget(slot.targetIndex)) {
-        clearTimeout(logoDelayTimer);
-        logoDelayTimer = setTimeout(() => {
-          if (!hasFacadeFound()) pickActive();
-        }, AR_SETTINGS.logoActivationDelayMs);
-        return;
-      }
-
       pickActive();
     };
     slot.anchor.onTargetLost = () => {
@@ -620,6 +618,9 @@ async function initAR() {
   }
 
   const startBtn = $('start-btn');
+  startBtn.disabled = true;
+  glbReady.finally(() => { startBtn.disabled = false; });
+
   startBtn.onclick = async () => {
     hide('start-screen');
     try {
@@ -653,10 +654,6 @@ async function initAR() {
       };
       renderer.setAnimationLoop(renderLoop);
     }
-
-    glbReady.then(() => {
-      if (activeSlot) mountToSlot(activeSlot, activeSlot.experience.id);
-    });
   };
 
   glbReady.catch(() => {});
