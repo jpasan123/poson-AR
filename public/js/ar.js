@@ -106,6 +106,7 @@ function mountLogoOnTower(model, logo, exp) {
 
   const rot = exp.logoRotation ?? { x: 0, y: Math.PI / 2, z: 0 };
   logo.rotation.set(rot.x, rot.y, rot.z);
+  logo.position.set(0, 0, 0);
   logo.frustumCulled = false;
   logo.visible = true;
 
@@ -122,6 +123,20 @@ function mountLogoOnTower(model, logo, exp) {
     mat.needsUpdate = true;
   });
 
+  const offset = exp.logoOffset ?? { x: -0.22, y: 1.95, z: 0.14 };
+  const finial = model.getObjectByName('Finial_Ball');
+
+  if (finial) {
+    const anchor = new THREE.Group();
+    anchor.name = 'logo-anchor';
+    anchor.position.set(offset.x, offset.y, offset.z);
+    anchor.add(logo);
+    finial.add(anchor);
+    model.updateMatrixWorld(true);
+    console.info('[AR] Logo mounted on finial');
+    return;
+  }
+
   model.updateMatrixWorld(true);
   const towerBox = getTowerBounds(model);
   if (towerBox.isEmpty()) {
@@ -129,17 +144,16 @@ function mountLogoOnTower(model, logo, exp) {
     return;
   }
 
-  const center = towerBox.getCenter(new THREE.Vector3());
-  const offset = exp.logoOffset ?? { x: 0, y: 0.06, z: 0 };
-  logo.position.set(
-    center.x + offset.x,
-    towerBox.max.y + offset.y,
-    center.z + offset.z,
+  const worldPos = new THREE.Vector3(
+    towerBox.getCenter(new THREE.Vector3()).x + offset.x,
+    towerBox.max.y + (exp.logoWorldLift ?? 0.15),
+    towerBox.getCenter(new THREE.Vector3()).z + offset.z,
   );
-
+  model.worldToLocal(worldPos);
+  logo.position.copy(worldPos);
   model.add(logo);
   model.updateMatrixWorld(true);
-  console.info('[AR] Logo mounted at', logo.position.x.toFixed(2), logo.position.y.toFixed(2), logo.position.z.toFixed(2));
+  console.info('[AR] Logo mounted at tower top');
 }
 
 function detachLogoForFitting(model) {

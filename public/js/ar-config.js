@@ -42,7 +42,7 @@ const LOCATIONS = {
     fitLift: 0.45,
     animationExclude: ['Main_Pivot'],
     logoRotation: { x: 0, y: 1.5708, z: 0 },
-    logoOffset: { x: 0, y: 0.06, z: 0 },
+    logoOffset: { x: -0.22, y: 1.95, z: 0.14 },
     defaultUserZoom: 0.88,
     defaultUserYOffset: 0,
     landscape: {
