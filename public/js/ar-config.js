@@ -40,7 +40,7 @@ const LOCATIONS = {
     modelOffset: { x: 0, y: 0.08, z: 0.03 },
     fitMode: 'facade',
     fitLift: 0.38,
-    defaultUserZoom: 0.82,
+    defaultUserZoom: 0.9,
     defaultUserYOffset: 0.04,
     landscape: {
       modelOffset: { x: 0, y: 0.08, z: 0.03 },
@@ -81,9 +81,11 @@ export const MODES = {
 };
 
 export const AR_SETTINGS = {
-  posSmooth: 0.28,
-  rotSmooth: 0.28,
-  posWarmupFrames: 0,
+  posSmooth: 0.11,
+  rotSmooth: 0.11,
+  scaleCalibrateFrames: 4,
+  scaleCap: 1.05,
+  scaleFloor: 0.38,
   defaultUserZoom: 1,
   minUserZoom: 0.55,
   maxUserZoom: 1.8,
@@ -92,9 +94,9 @@ export const AR_SETTINGS = {
   minUserYOffset: -0.3,
   maxUserYOffset: 0.35,
   positionStep: 0.06,
-  targetLostDelayMs: 120,
-  filterMinCF: 0.001,
-  filterBeta: 0.004,
+  targetLostDelayMs: 500,
+  filterMinCF: 0.003,
+  filterBeta: 0.0015,
   logoActivationDelayMs: 0,
   minCameraZoom: 1,
   maxCameraZoom: 3,
