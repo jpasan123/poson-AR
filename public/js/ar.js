@@ -68,7 +68,7 @@ function prepareModel(scene) {
   });
 }
 
-function getFitBox(model, fitBounds = 'mesh') {
+function getFitBox(model, fitBounds) {
   model.updateMatrixWorld(true);
 
   if (fitBounds !== 'mesh') {
@@ -96,7 +96,7 @@ function getFitBox(model, fitBounds = 'mesh') {
   return found ? box : new THREE.Box3().setFromObject(model);
 }
 
-function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds = 'mesh') {
+function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds) {
   const box = getFitBox(model, fitBounds);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
@@ -113,7 +113,7 @@ function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds = 'm
       model.position.y += size.y * 0.5;
       break;
     case 'facade':
-      model.position.y += size.y * (fitLift ?? 0.45);
+      model.position.y += size.y * (fitLift ?? 0.28);
       break;
     case 'center':
     default:
