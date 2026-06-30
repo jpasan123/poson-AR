@@ -39,12 +39,13 @@ const LOCATIONS = {
     modelScale: 0.82,
     modelOffset: { x: 0, y: 0.06, z: 0.05 },
     fitMode: 'facade',
-    fitLift: 0.42,
+    fitLift: 0.45,
+    playAnimation: false,
     defaultUserZoom: 0.88,
-    defaultUserYOffset: 0.02,
+    defaultUserYOffset: 0,
     landscape: {
       modelOffset: { x: 0, y: 0.06, z: 0.05 },
-      defaultUserYOffset: 0.02,
+      defaultUserYOffset: 0,
     },
   },
 };

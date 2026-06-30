@@ -65,6 +65,32 @@ function showError(message) {
   show('error-screen');
 }
 
+function sanitizeScene(scene) {
+  const remove = [];
+  scene.traverse((child) => {
+    const name = (child.name || '').toLowerCase();
+    if (
+      name === 'camera'
+      || name === 'light'
+      || name.includes('keylight')
+      || name.includes('filllight')
+      || name.includes('rimlight')
+    ) {
+      remove.push(child);
+    }
+  });
+  remove.forEach((node) => node.parent?.remove(node));
+}
+
+function applyStaticPose(model) {
+  const pivot = model.getObjectByName('Main_Pivot');
+  if (pivot) {
+    pivot.rotation.set(0, 0, 0);
+    pivot.quaternion.identity();
+  }
+  model.updateMatrixWorld(true);
+}
+
 function preNormalizeModel(model) {
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
@@ -332,6 +358,8 @@ async function loadExperiences(slots) {
     holder.name = exp.id;
 
     const model = asset.scene;
+    sanitizeScene(model);
+    applyStaticPose(model);
     preNormalizeModel(model);
     prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
@@ -340,9 +368,13 @@ async function loadExperiences(slots) {
     const slot = slotByExp.get(exp.id);
     if (slot) slot.attachRig.add(holder);
 
+    const anim = exp.playAnimation === false
+      ? null
+      : setupAnimations(model, asset.animations);
+
     registry.set(exp.id, {
       holder,
-      anim: setupAnimations(model, asset.animations),
+      anim,
     });
   }
 
