@@ -40,6 +40,15 @@ const $ = (id) => document.getElementById(id);
 const show = (id) => $(id)?.classList.remove('hidden');
 const hide = (id) => $(id)?.classList.add('hidden');
 
+const _targetPos = new THREE.Vector3();
+const _targetQuat = new THREE.Quaternion();
+const _targetScale = new THREE.Vector3();
+const _smoothPos = new THREE.Vector3();
+const _smoothQuat = new THREE.Quaternion();
+const _smoothScale = new THREE.Vector3();
+
+const markerScaleAvg = (vec) => (vec.x + vec.y + vec.z) / 3;
+
 function showError(message) {
   hide('loading-screen');
   hide('start-screen');
@@ -260,13 +269,8 @@ function bindButton(el, handler) {
   el.addEventListener('touchend', run, { passive: false });
 }
 
-async function loadExperiences(loader, slots) {
+async function loadExperiences(loader, userRig) {
   const registry = new Map();
-  const slotByExp = new Map();
-  slots.forEach((slot) => {
-    const id = slot.experience?.id;
-    if (id && !slotByExp.has(id)) slotByExp.set(id, slot);
-  });
 
   await Promise.all(EXPERIENCES.map(async (exp) => {
     if (registry.has(exp.id)) return;
@@ -280,9 +284,7 @@ async function loadExperiences(loader, slots) {
     prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
     holder.add(model);
-
-    const slot = slotByExp.get(exp.id);
-    if (slot) slot.attachRig.add(holder);
+    userRig.add(holder);
 
     registry.set(exp.id, {
       holder,
@@ -330,18 +332,23 @@ async function initAR() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+  const stableRig = new THREE.Group();
+  stableRig.visible = false;
+  scene.add(stableRig);
+
+  const userRig = new THREE.Group();
+  userRig.name = 'user-rig';
+  stableRig.add(userRig);
+
   const slots = [];
   for (let i = 0; i < slotCount; i++) {
     const exp = experienceForTarget(EXPERIENCES, i);
     const anchor = mindar.addAnchor(i);
     const marker = new THREE.Object3D();
-    const attachRig = new THREE.Group();
-    attachRig.name = 'attach-rig';
     const off = getMarkerOffset(exp);
     marker.position.set(off.x, off.y, off.z);
-    marker.add(attachRig);
     anchor.group.add(marker);
-    slots.push({ anchor, marker, attachRig, targetIndex: i, experience: exp });
+    slots.push({ anchor, marker, targetIndex: i, experience: exp });
   }
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.5));
@@ -361,14 +368,29 @@ async function initAR() {
   let orientationBusy = false;
   let lastLandscape = isLandscape();
   let pendingActiveSlot = null;
+  let lockedScale = null;
+  let scaleSamples = [];
+  let poseSynced = false;
 
   const getVideo = () => document.querySelector('#ar-container video');
   const cameraControls = createCameraControls(getVideo);
 
-  const applyUserTransform = (slot) => {
-    if (!slot) return;
-    slot.attachRig.position.set(0, position.getYOffset(), 0);
-    slot.attachRig.scale.setScalar(zoom.getZoom());
+  const resetPoseSync = () => {
+    lockedScale = null;
+    scaleSamples = [];
+    poseSynced = false;
+  };
+
+  const readMarkerPose = (marker) => {
+    marker.updateWorldMatrix(true, false);
+    marker.getWorldPosition(_targetPos);
+    marker.getWorldQuaternion(_targetQuat);
+    marker.getWorldScale(_targetScale);
+  };
+
+  const applyUserTransform = () => {
+    userRig.position.set(0, position.getYOffset(), 0);
+    userRig.scale.setScalar(zoom.getZoom());
   };
 
   const hideAllHolders = () => {
@@ -378,6 +400,7 @@ async function initAR() {
       entry.anim?.pause();
     });
     activeRegistry = null;
+    stableRig.visible = false;
   };
 
   const showExperience = (expId) => {
@@ -405,16 +428,13 @@ async function initAR() {
     const entry = expRegistry.get(expId);
     if (!entry) return false;
 
-    if (entry.holder.parent !== slot.attachRig) {
-      slot.attachRig.add(entry.holder);
-    }
-
     showExperience(expId);
-    applyUserTransform(slot);
+    applyUserTransform();
+    stableRig.visible = true;
     return true;
   };
 
-  const glbReady = loadExperiences(new GLTFLoader(), slots)
+  const glbReady = loadExperiences(new GLTFLoader(), userRig)
     .then((registry) => {
       expRegistry = registry;
       hide('loading-screen');
@@ -474,6 +494,7 @@ async function initAR() {
       hideAllHolders();
       found.clear();
       clearTimeout(hideTimer);
+      resetPoseSync();
       activeSlot = null;
 
       await mindar.stop();
@@ -515,8 +536,9 @@ async function initAR() {
         if (activeSlot?.experience) {
           zoom.resetFor(activeSlot.experience);
           position.resetFor(activeSlot.experience);
-          applyUserTransform(activeSlot);
+          applyUserTransform();
         }
+        resetPoseSync();
         await restartAR();
       }
     }, 500);
@@ -544,8 +566,11 @@ async function initAR() {
     }
 
     if (activeSlot?.experience?.id !== slot.experience.id) {
+      resetPoseSync();
       zoom.resetFor(slot.experience);
       position.resetFor(slot.experience);
+    } else if (activeSlot !== slot) {
+      resetPoseSync();
     }
 
     activeSlot = slot;
@@ -583,26 +608,26 @@ async function initAR() {
 
   bindButton($('zoom-in'), () => {
     zoom.zoomIn();
-    applyUserTransform(activeSlot);
+    applyUserTransform();
   });
   bindButton($('zoom-out'), () => {
     zoom.zoomOut();
-    applyUserTransform(activeSlot);
+    applyUserTransform();
   });
   bindButton($('zoom-reset'), () => {
     if (activeSlot?.experience) {
       zoom.resetFor(activeSlot.experience);
       position.resetFor(activeSlot.experience);
-      applyUserTransform(activeSlot);
+      applyUserTransform();
     }
   });
   bindButton($('move-up'), () => {
     position.moveUp();
-    applyUserTransform(activeSlot);
+    applyUserTransform();
   });
   bindButton($('move-down'), () => {
     position.moveDown();
-    applyUserTransform(activeSlot);
+    applyUserTransform();
   });
 
   bindButton($('torch-btn'), async () => {
@@ -615,6 +640,44 @@ async function initAR() {
   });
   bindButton($('cam-zoom-in'), () => cameraControls.camZoomIn());
   bindButton($('cam-zoom-out'), () => cameraControls.camZoomOut());
+
+  const updateStableRig = () => {
+    if (!activeSlot || !stableRig.visible) return;
+
+    applyUserTransform();
+
+    if (found.has(activeSlot)) {
+      readMarkerPose(activeSlot.marker);
+      const rawScale = markerScaleAvg(_targetScale);
+
+      if (lockedScale == null) {
+        scaleSamples.push(rawScale);
+        if (scaleSamples.length >= AR_SETTINGS.scaleCalibrateFrames) {
+          const sorted = [...scaleSamples].sort((a, b) => a - b);
+          lockedScale = sorted[Math.floor(sorted.length / 2)];
+        }
+      }
+
+      if (!poseSynced) {
+        _smoothPos.copy(_targetPos);
+        _smoothQuat.copy(_targetQuat);
+        _smoothScale.copy(_targetScale);
+        poseSynced = true;
+      } else {
+        _smoothPos.lerp(_targetPos, AR_SETTINGS.posSmooth);
+        _smoothQuat.slerp(_targetQuat, AR_SETTINGS.rotSmooth);
+        if (lockedScale != null) {
+          _smoothScale.set(lockedScale, lockedScale, lockedScale);
+        } else {
+          _smoothScale.lerp(_targetScale, AR_SETTINGS.scaleSmooth);
+        }
+      }
+
+      stableRig.position.copy(_smoothPos);
+      stableRig.quaternion.copy(_smoothQuat);
+      stableRig.scale.copy(_smoothScale);
+    }
+  };
 
   const startBtn = $('start-btn');
   startBtn.disabled = true;
@@ -646,8 +709,9 @@ async function initAR() {
     if (!renderLoop) {
       const clock = new THREE.Clock();
       renderLoop = () => {
+        updateStableRig();
         const delta = Math.min(clock.getDelta(), 0.032);
-        if (activeRegistry?.anim && activeRegistry.holder.visible) {
+        if (stableRig.visible && activeRegistry?.anim) {
           activeRegistry.anim.update(delta);
         }
         renderer.render(scene, camera);
