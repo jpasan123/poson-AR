@@ -6,6 +6,7 @@ import { AR_SETTINGS, getSetup, experienceForTarget, targetCount } from './ar-co
 const setup = getSetup();
 const EXPERIENCES = setup.experiences;
 const TARGET_PRIORITY = setup.targetPriority;
+const IS_ANDROID = /android/i.test(navigator.userAgent);
 
 const isLandscape = () => {
   const w = window.visualViewport?.width ?? window.innerWidth;
@@ -71,6 +72,8 @@ function sanitizeScene(scene) {
     const name = (child.name || '').toLowerCase();
     if (
       name === 'camera'
+      || name === 'maincamera'
+      || name.endsWith('camera')
       || name === 'light'
       || name.includes('keylight')
       || name.includes('filllight')
@@ -194,15 +197,18 @@ function prepareModel(scene) {
     if (!child.isMesh) return;
     child.frustumCulled = false;
     child.visible = true;
+    child.matrixAutoUpdate = true;
     const mats = Array.isArray(child.material) ? child.material : [child.material];
     mats.forEach((mat) => {
       if (!mat) return;
       mat.side = THREE.FrontSide;
+      mat.depthTest = true;
+      mat.depthWrite = true;
       mat.needsUpdate = true;
 
       if (mat.map) {
         mat.map.colorSpace = THREE.SRGBColorSpace;
-        mat.map.anisotropy = 4;
+        mat.map.anisotropy = IS_ANDROID ? 1 : 4;
         mat.map.needsUpdate = true;
       }
       if (mat.emissiveMap) {
@@ -446,59 +452,22 @@ function bindButton(el, handler) {
   el.addEventListener('touchend', run, { passive: false });
 }
 
-const _trackPos = new THREE.Vector3();
-const _trackQuat = new THREE.Quaternion();
-const _trackScale = new THREE.Vector3();
-
-function resetSlotTracking(slot) {
-  slot.tracking.ready = false;
-  slot.tracking.frames = 0;
-  slot.tracking.scales = [];
-  slot.tracking.stableScale = null;
-}
-
-function updateSmoothTracking(slots) {
-  for (const slot of slots) {
-    const { anchor, smoothRig, tracking } = slot;
-    if (!anchor.visible) {
-      smoothRig.visible = false;
-      resetSlotTracking(slot);
-      continue;
-    }
-
-    smoothRig.visible = true;
-    anchor.group.updateMatrixWorld(true);
-    anchor.group.getWorldPosition(_trackPos);
-    anchor.group.getWorldQuaternion(_trackQuat);
-    anchor.group.getWorldScale(_trackScale);
-
-    if (tracking.frames < AR_SETTINGS.scaleCalibrateFrames) {
-      tracking.scales.push(_trackScale.x);
-      tracking.frames += 1;
-      if (tracking.frames >= AR_SETTINGS.scaleCalibrateFrames) {
-        tracking.stableScale = tracking.scales.reduce((a, b) => a + b, 0)
-          / tracking.scales.length;
-      }
-    }
-
-    if (tracking.stableScale != null) {
-      _trackScale.setScalar(tracking.stableScale);
-    }
-
-    if (!tracking.ready) {
-      smoothRig.position.copy(_trackPos);
-      smoothRig.quaternion.copy(_trackQuat);
-      smoothRig.scale.copy(_trackScale);
-      if (tracking.frames >= AR_SETTINGS.scaleCalibrateFrames) {
-        tracking.ready = true;
-      }
-      continue;
-    }
-
-    smoothRig.position.lerp(_trackPos, AR_SETTINGS.posSmooth);
-    smoothRig.quaternion.slerp(_trackQuat, AR_SETTINGS.rotSmooth);
-    smoothRig.scale.lerp(_trackScale, AR_SETTINGS.scaleSmooth);
+function configureRenderer(renderer) {
+  const maxDpr = IS_ANDROID ? 1.25 : 1.5;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.setClearColor(0x000000, 0);
+  renderer.sortObjects = true;
+  if (IS_ANDROID) {
+    renderer.powerPreference = 'high-performance';
   }
+  const canvas = renderer.domElement;
+  canvas.style.position = 'absolute';
+  canvas.style.inset = '0';
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  canvas.style.zIndex = '2';
+  canvas.style.pointerEvents = 'none';
 }
 
 async function loadExperiences(slots) {
@@ -512,7 +481,13 @@ async function loadExperiences(slots) {
   for (const exp of EXPERIENCES) {
     if (registry.has(exp.id)) continue;
 
-    const asset = await loadModelForExperience(exp);
+    let asset;
+    try {
+      asset = await loadModelForExperience(exp);
+    } catch (err) {
+      console.error(`[AR] Failed to load model for ${exp.id}:`, err);
+      continue;
+    }
     const holder = new THREE.Group();
     holder.visible = false;
     holder.name = exp.id;
@@ -586,33 +561,20 @@ async function initAR() {
   }
 
   const { renderer, scene, camera } = mindar;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  configureRenderer(renderer);
 
   const slots = [];
   for (let i = 0; i < slotCount; i++) {
     const exp = experienceForTarget(EXPERIENCES, i);
     const anchor = mindar.addAnchor(i);
-    const smoothRig = new THREE.Group();
-    smoothRig.name = 'smooth-rig';
-    smoothRig.visible = false;
     const marker = new THREE.Object3D();
     const attachRig = new THREE.Group();
     attachRig.name = 'attach-rig';
     const off = getMarkerOffset(exp);
     marker.position.set(off.x, off.y, off.z);
     marker.add(attachRig);
-    smoothRig.add(marker);
-    scene.add(smoothRig);
-    slots.push({
-      anchor,
-      smoothRig,
-      marker,
-      attachRig,
-      targetIndex: i,
-      experience: exp,
-      tracking: { ready: false, frames: 0, scales: [] },
-    });
+    anchor.group.add(marker);
+    slots.push({ anchor, marker, attachRig, targetIndex: i, experience: exp });
   }
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.65));
@@ -691,6 +653,15 @@ async function initAR() {
     return true;
   };
 
+  const ensureActiveVisible = () => {
+    if (!activeSlot?.experience || !expRegistry || !found.has(activeSlot)) return;
+    mountToSlot(activeSlot, activeSlot.experience.id);
+    if (activeRegistry?.holder) {
+      activeRegistry.holder.visible = true;
+      activeRegistry.holder.traverse((child) => { child.visible = true; });
+    }
+  };
+
   hide('loading-screen');
   show('start-screen');
   setLoadStatus('Loading 3D model…');
@@ -704,6 +675,7 @@ async function initAR() {
         pendingActiveSlot = null;
         activeSlot = slot;
         mountToSlot(slot, slot.experience.id);
+        ensureActiveVisible();
         show('ar-controls');
       }
       return registry;
@@ -730,7 +702,7 @@ async function initAR() {
     document.documentElement.style.height = `${h}px`;
     document.body.style.height = `${h}px`;
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_ANDROID ? 1.25 : 1.5));
     renderer.setSize(w, h, true);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -766,6 +738,7 @@ async function initAR() {
 
       const video = getVideo();
       if (video) {
+        video.style.zIndex = '1';
         video.setAttribute('playsinline', '');
         video.setAttribute('webkit-playsinline', '');
         video.muted = true;
@@ -846,9 +819,9 @@ async function initAR() {
   slots.forEach((slot) => {
     slot.anchor.onTargetFound = () => {
       clearTimeout(hideTimer);
-      resetSlotTracking(slot);
       found.add(slot);
       pickActive();
+      ensureActiveVisible();
     };
     slot.anchor.onTargetLost = () => {
       found.delete(slot);
@@ -909,6 +882,7 @@ async function initAR() {
       show('camera-controls');
       const video = getVideo();
       if (video) {
+        video.style.zIndex = '1';
         video.setAttribute('playsinline', '');
         video.setAttribute('webkit-playsinline', '');
         video.muted = true;
@@ -925,7 +899,7 @@ async function initAR() {
       const clock = new THREE.Clock();
       renderLoop = () => {
         const delta = Math.min(clock.getDelta(), 0.032);
-        updateSmoothTracking(slots);
+        ensureActiveVisible();
         if (activeRegistry?.anim && activeRegistry.holder.visible) {
           activeRegistry.anim.update(delta);
         }

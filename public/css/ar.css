@@ -40,6 +40,11 @@ html, body {
 
 #ar-container video {
   object-fit: cover;
+  z-index: 1;
+}
+
+#ar-container canvas {
+  z-index: 2;
 }
 
 .overlay {
