@@ -38,13 +38,14 @@ const LOCATIONS = {
     modelSrc: 'assets/models/bay-12-place.glb',
     modelScale: 0.78,
     modelOffset: { x: 0, y: 0.08, z: 0.03 },
-    fitMode: 'center',
+    fitMode: 'facade',
+    fitLift: 0.40,
     fitBounds: 'mesh',
     defaultUserZoom: 1,
-    defaultUserYOffset: 0.06,
+    defaultUserYOffset: 0.04,
     landscape: {
       modelOffset: { x: 0, y: 0.08, z: 0.03 },
-      defaultUserYOffset: 0.06,
+      defaultUserYOffset: 0.04,
     },
   },
 };

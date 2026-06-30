@@ -121,12 +121,12 @@ function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds) {
   }
 
   let scaleBase;
-  if (fitMode === 'facade') {
+  if (fitMode === 'facade' || fitMode === 'center') {
     scaleBase = Math.max(size.x, size.y * 0.88);
   } else {
     scaleBase = Math.max(size.x, size.y, size.z);
   }
-  model.scale.setScalar(modelScale / scaleBase);
+  model.scale.setScalar(modelScale / Math.max(scaleBase, 0.0001));
 }
 
 function setupAnimations(root, clips) {
@@ -411,16 +411,13 @@ async function initAR() {
       applyMarkerOffsets();
 
       if (arRunning && flipped) {
-        await restartAR();
-        return;
-      }
-
-      if (arRunning) {
         resetCalibration();
         if (activeSlot?.experience) {
           zoom.resetFor(activeSlot.experience);
           position.resetFor(activeSlot.experience);
         }
+        await restartAR();
+        return;
       }
     }, 500);
   };
@@ -568,8 +565,9 @@ async function initAR() {
     displayRig.position.copy(_smoothPos);
     displayRig.quaternion.copy(_smoothQuat);
 
-    const base = lockedWorldScale ?? (calibrateSum / Math.max(calibrateCount, 1));
-    displayRig.scale.setScalar(base * zoom.getZoom());
+    const base = lockedWorldScale
+      ?? (calibrateCount > 0 ? calibrateSum / calibrateCount : avgScale(_targetScale));
+    displayRig.scale.setScalar(Math.max(base, 0.0001) * zoom.getZoom());
   }
 
   const startBtn = $('start-btn');
