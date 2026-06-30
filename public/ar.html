@@ -8,9 +8,6 @@
   <meta name="theme-color" content="#000000" />
   <title>JENDO Poson AR</title>
   <link rel="preload" href="targets.mind" as="fetch" crossorigin="anonymous" />
-  <link rel="preload" href="assets/models/poson-lantern.glb" as="fetch" crossorigin="anonymous" />
-  <link rel="preload" href="assets/models/jendo-building.glb" as="fetch" crossorigin="anonymous" />
-  <link rel="preload" href="assets/models/bay-12-place.fbx" as="fetch" crossorigin="anonymous" />
   <link rel="stylesheet" href="css/ar.css" />
   <script type="importmap">
   {
@@ -38,6 +35,7 @@
       </svg>
       Tap to Start Camera
     </button>
+    <p id="load-status" class="loader-sub start-status"></p>
   </div>
 
   <div id="error-screen" class="overlay hidden">
@@ -96,6 +94,6 @@
 
   <div id="ar-container"></div>
 
-  <script type="module" src="js/ar.js?v=26"></script>
+  <script type="module" src="js/ar.js?v=27"></script>
 </body>
 </html>
