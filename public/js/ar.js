@@ -17,7 +17,6 @@ function isLowEndDevice() {
 }
 
 const LOW_END = isLowEndDevice();
-const ANDROID_LITE = IS_ANDROID;
 
 function hasWebGL() {
   try {
@@ -67,7 +66,7 @@ function setLoadStatus(message) {
 }
 
 function prefetchModels(experiences) {
-  if (IS_ANDROID) return;
+  if (LOW_END) return;
   experiences.forEach((exp) => {
     [exp.modelSrc].filter(Boolean).forEach((href) => {
       const link = document.createElement('link');
@@ -125,14 +124,62 @@ function getTowerBounds(model) {
   return box;
 }
 
+function applyLogoMapFlip(mesh) {
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  mats.forEach((mat) => {
+    if (!mat?.map) return;
+    mat.map.wrapS = THREE.RepeatWrapping;
+    mat.map.repeat.x = -1;
+    mat.map.offset.x = 1;
+    mat.map.needsUpdate = true;
+  });
+}
+
+function logoPlaneSize(map) {
+  const img = map?.image;
+  if (img?.width && img?.height) {
+    const aspect = img.width / img.height;
+    const height = 0.38;
+    return { w: height * aspect, h: height };
+  }
+  return { w: 1.1, h: 0.38 };
+}
+
+function createLogoMaterial(srcMat) {
+  if (!srcMat) {
+    return new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, depthWrite: true });
+  }
+  const mat = new THREE.MeshStandardMaterial({
+    map: srcMat.map,
+    normalMap: srcMat.normalMap,
+    metalnessMap: srcMat.metalnessMap,
+    roughnessMap: srcMat.roughnessMap,
+    color: srcMat.color ?? new THREE.Color(0xffffff),
+    metalness: srcMat.metalness ?? 0,
+    roughness: srcMat.roughness ?? 0.8,
+    side: THREE.DoubleSide,
+    depthWrite: true,
+  });
+  if (mat.map) {
+    mat.map.colorSpace = THREE.SRGBColorSpace;
+    mat.map.anisotropy = 4;
+    mat.map.needsUpdate = true;
+  }
+  return mat;
+}
+
 function mountLogoOnTower(model, logo, exp) {
   if (!logo) return;
 
   const rot = exp.logoRotation ?? { x: 0, y: Math.PI / 2, z: 0 };
   logo.rotation.set(rot.x, rot.y, rot.z);
   logo.position.set(0, 0, 0);
+  logo.scale.x = Math.abs(logo.scale.x || 1);
+  logo.scale.y = Math.abs(logo.scale.y || 1);
+  logo.scale.z = Math.abs(logo.scale.z || 1);
   if (exp.logoFlipX) {
-    logo.scale.x = -Math.abs(logo.scale.x || 1);
+    if (LOW_END) applyLogoMapFlip(logo);
+    else logo.scale.x = -Math.abs(logo.scale.x || 1);
   }
   logo.frustumCulled = false;
   logo.visible = true;
@@ -260,47 +307,27 @@ function simplifyLogoMesh(logo) {
 
   const srcMat = Array.isArray(logo.material) ? logo.material[0] : logo.material;
   const map = srcMat?.map ?? null;
-  const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.1, 0.38),
-    new THREE.MeshBasicMaterial({
-      map,
-      side: THREE.DoubleSide,
-      depthWrite: true,
-      transparent: false,
-    }),
-  );
+  const { w, h } = logoPlaneSize(map);
+  const mat = createLogoMaterial(srcMat);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
   plane.name = logo.name;
   plane.rotation.copy(logo.rotation);
   plane.scale.copy(logo.scale);
+  plane.scale.x = Math.abs(plane.scale.x);
+  plane.scale.y = Math.abs(plane.scale.y);
+  plane.scale.z = Math.abs(plane.scale.z);
   plane.frustumCulled = false;
-  if (map) {
-    map.anisotropy = 1;
-    map.minFilter = THREE.LinearFilter;
-    map.generateMipmaps = false;
-    map.needsUpdate = true;
-  }
   logo.geometry?.dispose?.();
   srcMat?.dispose?.();
-  console.info('[AR] Logo GPU simplified:', verts, 'verts -> plane');
+  console.info('[AR] Logo simplified for low-end GPU:', verts, 'verts -> plane');
   return plane;
 }
 
 function optimizeModelForDevice(model, logoMesh) {
-  if (!ANDROID_LITE) return logoMesh;
+  if (!LOW_END) return logoMesh;
   let logo = logoMesh;
   if (logo) logo = simplifyLogoMesh(logo);
   lightenMaterials(model);
-  if (logo?.isMesh) {
-    const mat = Array.isArray(logo.material) ? logo.material[0] : logo.material;
-    if (mat && !mat.isMeshBasicMaterial) {
-      logo.material = new THREE.MeshBasicMaterial({
-        map: mat.map,
-        side: THREE.DoubleSide,
-        depthWrite: true,
-      });
-      mat.dispose?.();
-    }
-  }
   return logo;
 }
 
@@ -320,7 +347,7 @@ function prepareModel(scene) {
 
       if (mat.map) {
         mat.map.colorSpace = THREE.SRGBColorSpace;
-        mat.map.anisotropy = IS_ANDROID ? 1 : 4;
+        mat.map.anisotropy = LOW_END ? 1 : 4;
         mat.map.needsUpdate = true;
       }
       if (mat.emissiveMap) {
@@ -623,7 +650,7 @@ function bindButton(el, handler) {
 }
 
 function configureRenderer(renderer) {
-  const maxDpr = LOW_END ? 1 : (IS_ANDROID ? 1.25 : 1.5);
+  const maxDpr = LOW_END ? 1 : (IS_ANDROID ? 1.5 : 1.5);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(0x000000, 0);
