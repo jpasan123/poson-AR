@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { MindARThree } from 'mindar-image-three';
 import { AR_SETTINGS, getSetup, experienceForTarget, targetCount } from './ar-config.js';
 
@@ -64,9 +65,34 @@ function prepareModel(scene) {
     mats.forEach((mat) => {
       if (!mat) return;
       mat.side = THREE.FrontSide;
-      if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+      mat.needsUpdate = true;
+
+      if (mat.map) {
+        mat.map.colorSpace = THREE.SRGBColorSpace;
+        mat.map.anisotropy = 8;
+        mat.map.needsUpdate = true;
+      }
+      if (mat.emissiveMap) {
+        mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+        mat.emissiveMap.needsUpdate = true;
+      }
+      if (mat.normalMap) mat.normalMap.colorSpace = THREE.LinearSRGBColorSpace;
+      if (mat.roughnessMap) mat.roughnessMap.colorSpace = THREE.LinearSRGBColorSpace;
+      if (mat.metalnessMap) mat.metalnessMap.colorSpace = THREE.LinearSRGBColorSpace;
     });
   });
+}
+
+async function loadModelAsset(src) {
+  const ext = src.split('?')[0].split('.').pop()?.toLowerCase();
+
+  if (ext === 'fbx') {
+    const object = await new FBXLoader().loadAsync(src);
+    return { scene: object, animations: object.animations ?? [] };
+  }
+
+  const gltf = await new GLTFLoader().loadAsync(src);
+  return { scene: gltf.scene, animations: gltf.animations ?? [] };
 }
 
 function getFitBox(model, fitBounds) {
@@ -269,18 +295,18 @@ function bindButton(el, handler) {
   el.addEventListener('touchend', run, { passive: false });
 }
 
-async function loadExperiences(loader, userRig) {
+async function loadExperiences(userRig) {
   const registry = new Map();
 
   await Promise.all(EXPERIENCES.map(async (exp) => {
     if (registry.has(exp.id)) return;
 
-    const gltf = await loader.loadAsync(exp.modelSrc);
+    const asset = await loadModelAsset(exp.modelSrc);
     const holder = new THREE.Group();
     holder.visible = false;
     holder.name = exp.id;
 
-    const model = gltf.scene;
+    const model = asset.scene;
     prepareModel(model);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
     holder.add(model);
@@ -288,7 +314,7 @@ async function loadExperiences(loader, userRig) {
 
     registry.set(exp.id, {
       holder,
-      anim: setupAnimations(model, gltf.animations),
+      anim: setupAnimations(model, asset.animations),
     });
   }));
 
@@ -351,10 +377,13 @@ async function initAR() {
     slots.push({ anchor, marker, targetIndex: i, experience: exp });
   }
 
-  scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-  const key = new THREE.DirectionalLight(0xffffff, 1.2);
+  scene.add(new THREE.AmbientLight(0xffffff, 1.65));
+  const key = new THREE.DirectionalLight(0xffffff, 1.35);
   key.position.set(1, 3, 2);
   scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.55);
+  fill.position.set(-2, 1, -1);
+  scene.add(fill);
 
   let activeSlot = null;
   let activeRegistry = null;
@@ -434,7 +463,7 @@ async function initAR() {
     return true;
   };
 
-  const glbReady = loadExperiences(new GLTFLoader(), userRig)
+  const glbReady = loadExperiences(userRig)
     .then((registry) => {
       expRegistry = registry;
       hide('loading-screen');

@@ -35,11 +35,12 @@ const LOCATIONS = {
   'bay-12-place': {
     id: 'bay-12-place',
     targetIndices: [4, 5],
-    modelSrc: 'assets/models/bay-12-place.glb',
+    modelSrc: 'assets/models/bay-12-place.fbx',
     modelScale: 0.78,
     modelOffset: { x: 0, y: 0.08, z: 0.03 },
     fitMode: 'facade',
     fitLift: 0.38,
+    fitBounds: 'mesh',
     defaultUserZoom: 0.9,
     defaultUserYOffset: 0.04,
     landscape: {
