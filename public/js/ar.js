@@ -107,6 +107,9 @@ function mountLogoOnTower(model, logo, exp) {
   const rot = exp.logoRotation ?? { x: 0, y: Math.PI / 2, z: 0 };
   logo.rotation.set(rot.x, rot.y, rot.z);
   logo.position.set(0, 0, 0);
+  if (exp.logoFlipX) {
+    logo.scale.x = -Math.abs(logo.scale.x || 1);
+  }
   logo.frustumCulled = false;
   logo.visible = true;
 
@@ -259,7 +262,7 @@ function getFitBox(model, fitBounds) {
   return found ? box : new THREE.Box3().setFromObject(model);
 }
 
-function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds) {
+function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds, fitHeightFactor) {
   const box = getFitBox(model, fitBounds);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
@@ -285,7 +288,7 @@ function fitModel(model, modelScale, fitMode = 'ground', fitLift, fitBounds) {
 
   let scaleBase;
   if (fitMode === 'facade' || fitMode === 'center') {
-    scaleBase = Math.max(size.x, size.y * 0.88);
+    scaleBase = Math.max(size.x, size.y * (fitHeightFactor ?? 0.88));
   } else {
     scaleBase = Math.max(size.x, size.y, size.z);
   }
@@ -443,6 +446,61 @@ function bindButton(el, handler) {
   el.addEventListener('touchend', run, { passive: false });
 }
 
+const _trackPos = new THREE.Vector3();
+const _trackQuat = new THREE.Quaternion();
+const _trackScale = new THREE.Vector3();
+
+function resetSlotTracking(slot) {
+  slot.tracking.ready = false;
+  slot.tracking.frames = 0;
+  slot.tracking.scales = [];
+  slot.tracking.stableScale = null;
+}
+
+function updateSmoothTracking(slots) {
+  for (const slot of slots) {
+    const { anchor, smoothRig, tracking } = slot;
+    if (!anchor.visible) {
+      smoothRig.visible = false;
+      resetSlotTracking(slot);
+      continue;
+    }
+
+    smoothRig.visible = true;
+    anchor.group.updateMatrixWorld(true);
+    anchor.group.getWorldPosition(_trackPos);
+    anchor.group.getWorldQuaternion(_trackQuat);
+    anchor.group.getWorldScale(_trackScale);
+
+    if (tracking.frames < AR_SETTINGS.scaleCalibrateFrames) {
+      tracking.scales.push(_trackScale.x);
+      tracking.frames += 1;
+      if (tracking.frames >= AR_SETTINGS.scaleCalibrateFrames) {
+        tracking.stableScale = tracking.scales.reduce((a, b) => a + b, 0)
+          / tracking.scales.length;
+      }
+    }
+
+    if (tracking.stableScale != null) {
+      _trackScale.setScalar(tracking.stableScale);
+    }
+
+    if (!tracking.ready) {
+      smoothRig.position.copy(_trackPos);
+      smoothRig.quaternion.copy(_trackQuat);
+      smoothRig.scale.copy(_trackScale);
+      if (tracking.frames >= AR_SETTINGS.scaleCalibrateFrames) {
+        tracking.ready = true;
+      }
+      continue;
+    }
+
+    smoothRig.position.lerp(_trackPos, AR_SETTINGS.posSmooth);
+    smoothRig.quaternion.slerp(_trackQuat, AR_SETTINGS.rotSmooth);
+    smoothRig.scale.lerp(_trackScale, AR_SETTINGS.scaleSmooth);
+  }
+}
+
 async function loadExperiences(slots) {
   const registry = new Map();
   const slotByExp = new Map();
@@ -465,7 +523,14 @@ async function loadExperiences(slots) {
     const logoMesh = detachLogoForFitting(model);
     preNormalizeModel(model);
     prepareModel(model);
-    fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
+    fitModel(
+      model,
+      exp.modelScale,
+      exp.fitMode ?? 'ground',
+      exp.fitLift,
+      exp.fitBounds,
+      exp.fitHeightFactor,
+    );
     mountLogoOnTower(model, logoMesh, exp);
     holder.add(model);
 
@@ -528,14 +593,26 @@ async function initAR() {
   for (let i = 0; i < slotCount; i++) {
     const exp = experienceForTarget(EXPERIENCES, i);
     const anchor = mindar.addAnchor(i);
+    const smoothRig = new THREE.Group();
+    smoothRig.name = 'smooth-rig';
+    smoothRig.visible = false;
     const marker = new THREE.Object3D();
     const attachRig = new THREE.Group();
     attachRig.name = 'attach-rig';
     const off = getMarkerOffset(exp);
     marker.position.set(off.x, off.y, off.z);
     marker.add(attachRig);
-    anchor.group.add(marker);
-    slots.push({ anchor, marker, attachRig, targetIndex: i, experience: exp });
+    smoothRig.add(marker);
+    scene.add(smoothRig);
+    slots.push({
+      anchor,
+      smoothRig,
+      marker,
+      attachRig,
+      targetIndex: i,
+      experience: exp,
+      tracking: { ready: false, frames: 0, scales: [] },
+    });
   }
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.65));
@@ -769,6 +846,7 @@ async function initAR() {
   slots.forEach((slot) => {
     slot.anchor.onTargetFound = () => {
       clearTimeout(hideTimer);
+      resetSlotTracking(slot);
       found.add(slot);
       pickActive();
     };
@@ -847,6 +925,7 @@ async function initAR() {
       const clock = new THREE.Clock();
       renderLoop = () => {
         const delta = Math.min(clock.getDelta(), 0.032);
+        updateSmoothTracking(slots);
         if (activeRegistry?.anim && activeRegistry.holder.visible) {
           activeRegistry.anim.update(delta);
         }
