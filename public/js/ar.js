@@ -478,7 +478,7 @@ async function initAR() {
       return registry;
     })
     .catch((err) => {
-      console.error(err);
+      console.error('Model load failed:', err);
       showError('3D model failed to load.');
       throw err;
     });
