@@ -37,7 +37,13 @@ const getDefaultYOffset = (exp) => {
   return exp.defaultUserYOffset ?? AR_SETTINGS.defaultUserYOffset;
 };
 
-const getWorldScale = (exp) => exp?.worldScale ?? AR_SETTINGS.worldScaleDefault;
+const markerScaleAvg = (vec) => Math.max((vec.x + vec.y + vec.z) / 3, 0.0001);
+
+const clampDisplayScale = (raw, exp) => {
+  const cap = exp?.scaleCap ?? AR_SETTINGS.scaleCap;
+  const floor = exp?.scaleFloor ?? AR_SETTINGS.scaleFloor;
+  return THREE.MathUtils.clamp(raw, floor, cap);
+};
 
 const $ = (id) => document.getElementById(id);
 const show = (id) => $(id)?.classList.remove('hidden');
@@ -372,6 +378,8 @@ async function initAR() {
   const found = new Set();
   let posWarmup = 0;
   let posReady = false;
+  let lockedWorldScale = null;
+  let scaleSamples = [];
   let renderLoop = null;
   let arRunning = false;
   let orientationBusy = false;
@@ -394,6 +402,8 @@ async function initAR() {
   const resetCalibration = () => {
     posWarmup = 0;
     posReady = false;
+    lockedWorldScale = null;
+    scaleSamples = [];
   };
 
   const applyMarkerOffsets = () => {
@@ -509,7 +519,7 @@ async function initAR() {
   };
 
   const showExperience = (expId) => {
-    if (!expRegistry) return;
+    if (!expRegistry) return false;
     expRegistry.forEach((entry, id) => {
       const on = id === expId;
       entry.holder.visible = on;
@@ -517,6 +527,7 @@ async function initAR() {
       else entry.anim?.pause();
     });
     activeRegistry = expRegistry.get(expId) ?? null;
+    return true;
   };
 
   const setActive = (slot) => {
@@ -537,13 +548,18 @@ async function initAR() {
     }
 
     activeSlot = slot;
-    showExperience(slot.experience.id);
     displayRig.visible = true;
     readMarkerPose(slot.marker);
     _smoothPos.copy(_targetPos);
     _smoothQuat.copy(_targetQuat);
     displayRig.position.copy(_smoothPos);
     displayRig.quaternion.copy(_smoothQuat);
+
+    if (!showExperience(slot.experience.id)) {
+      glbReady.then(() => {
+        if (activeSlot === slot) showExperience(slot.experience.id);
+      });
+    }
     show('ar-controls');
   };
 
@@ -623,6 +639,16 @@ async function initAR() {
 
     readMarkerPose(activeSlot.marker);
 
+    const rawScale = markerScaleAvg(_targetScale);
+    if (lockedWorldScale == null) {
+      scaleSamples.push(rawScale);
+      if (scaleSamples.length >= AR_SETTINGS.scaleCalibrateFrames) {
+        const sorted = [...scaleSamples].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        lockedWorldScale = clampDisplayScale(median, activeSlot.experience);
+      }
+    }
+
     if (!posReady) {
       _smoothPos.copy(_targetPos);
       _smoothQuat.copy(_targetQuat);
@@ -638,7 +664,15 @@ async function initAR() {
     offsetRig.position.copy(_userOffset);
     displayRig.position.copy(_smoothPos);
     displayRig.quaternion.copy(_smoothQuat);
-    displayRig.scale.setScalar(getWorldScale(activeSlot.experience) * zoom.getZoom());
+
+    const baseScale = lockedWorldScale
+      ?? clampDisplayScale(
+        scaleSamples.length
+          ? scaleSamples.reduce((a, b) => a + b, 0) / scaleSamples.length
+          : rawScale,
+        activeSlot.experience,
+      );
+    displayRig.scale.setScalar(baseScale * zoom.getZoom());
   }
 
   const startBtn = $('start-btn');
