@@ -66,19 +66,38 @@ function showError(message) {
   show('error-screen');
 }
 
-function prepareModel(scene) {
+function preNormalizeModel(model) {
+  model.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(model);
+  if (box.isEmpty()) return;
+
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim > 10) {
+    model.scale.setScalar(1 / maxDim);
+    model.updateMatrixWorld(true);
+  }
+}
+
+function prepareModel(scene, format = 'glb') {
   scene.traverse((child) => {
     if (!child.isMesh) return;
     child.frustumCulled = false;
+    child.visible = true;
     const mats = Array.isArray(child.material) ? child.material : [child.material];
     mats.forEach((mat) => {
       if (!mat) return;
-      mat.side = THREE.FrontSide;
+      mat.side = format === 'fbx' ? THREE.DoubleSide : THREE.FrontSide;
       mat.needsUpdate = true;
+
+      if (format === 'fbx' && mat.isMeshPhongMaterial) {
+        mat.shininess = Math.min(mat.shininess ?? 30, 35);
+        mat.specular?.setHex?.(0x333333);
+      }
 
       if (mat.map) {
         mat.map.colorSpace = THREE.SRGBColorSpace;
-        mat.map.anisotropy = 8;
+        mat.map.anisotropy = 4;
         mat.map.needsUpdate = true;
       }
       if (mat.emissiveMap) {
@@ -327,8 +346,10 @@ async function loadExperiences(slots) {
     holder.name = exp.id;
 
     const model = asset.scene;
-    prepareModel(model);
+    if (asset.format === 'fbx') preNormalizeModel(model);
+    prepareModel(model, asset.format);
     fitModel(model, exp.modelScale, exp.fitMode ?? 'ground', exp.fitLift, exp.fitBounds);
+    model.visible = true;
     holder.add(model);
 
     const slot = slotByExp.get(exp.id);
@@ -443,6 +464,7 @@ async function initAR() {
     expRegistry.forEach((item) => {
       const on = item === entry;
       item.holder.visible = on;
+      item.holder.traverse((child) => { child.visible = on; });
       if (on) item.anim?.play();
       else item.anim?.pause();
     });
@@ -608,8 +630,8 @@ async function initAR() {
     }
 
     activeSlot = slot;
-    mountToSlot(slot, slot.experience.id);
-    show('ar-controls');
+    const mounted = mountToSlot(slot, slot.experience.id);
+    if (mounted || !expRegistry) show('ar-controls');
   };
 
   const pickActive = () => {
